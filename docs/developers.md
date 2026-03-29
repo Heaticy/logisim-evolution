@@ -110,6 +110,9 @@ Packages can be built by running the `createAll` task:
 > installer. See Java's [jpackage documentation](https://docs.oracle.com/en/java/javase/21/jpackage/packaging-overview.html)
 > for more details of tool requirements.
 
+On macOS, `createAll` now builds both `.dmg` and `.pkg` packages. The `.pkg` installer also installs a
+`/usr/local/bin/logisim-evolution` wrapper for terminal launch support.
+
 To see all available tasks run: `./gradlew tasks --all`
 
 ## Testing development code ##

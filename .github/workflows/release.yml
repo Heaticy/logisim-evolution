@@ -76,23 +76,38 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v6
 
-      - name: Set up JDK
+      - name: Set up aarch64 JDK
         uses: actions/setup-java@v5
         with:
           java-version: ${{ env.JDK_VERSION }}
           distribution: ${{ env.JDK_DISTRO }}
 
-      - name: Build dmg
+      - name: Build aarch64 dmg and pkg
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew createDmg
+          ./gradlew createDmg createPkg
+
+      - name: Set up x86_64 JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: ${{ env.JDK_DISTRO }}
+          architecture: x64
+
+      - name: Build x86_64 dmg and pkg
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew createDmg createPkg
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifacts
-          path: build/dist/*.dmg
+          path: |
+            build/dist/*.dmg
+            build/dist/*.pkg
 
   publish_release:
     name: Publish Release

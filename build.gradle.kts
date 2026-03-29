@@ -156,6 +156,7 @@ extra.apply {
   // The root dir for jpackage extra files.
   val supportDir="${projectDir}/support/jpackage"
   set(SUPPORT_DIR, supportDir)
+  val linuxResourceDir = "${supportDir}/linux/resources"
 
   // Project name with uppercase first letter
   val uppercaseProjectName = project.name.replaceFirstChar { it.uppercase() }.trim()
@@ -212,6 +213,7 @@ extra.apply {
       "--app-version", appVersion,
       "--file-associations", "${supportDir}/linux/file.jpackage",
       "--icon", "${supportDir}/linux/logisim-icon-128.png",
+      "--resource-dir", linuxResourceDir,
       "--install-dir", "/opt",
       "--linux-shortcut"
   )
@@ -737,6 +739,56 @@ tasks.register("createDmg") {
 }
 
 /**
+ * Task: createPkg
+ *
+ * Creates macOS PKG package file.
+ */
+tasks.register("createPkg") {
+  group = "build"
+  description = "Makes the macOS PKG package."
+  dependsOn("createApp")
+
+  val supportDir = ext.get(SUPPORT_DIR) as String
+  val appDirName = ext.get(APP_DIR_NAME) as String
+  val osArch = ext.get(OS_ARCH) as String
+  val projectName = project.name
+  val jPackage = ext.get(JPACKAGE) as String
+  val appVersion = ext.get(APP_VERSION_SHORT) as String
+  val targetDir = ext.get(TARGET_DIR) as String
+  val outputFile = "${ext.get(TARGET_FILE_PATH_BASE) as String}-${osArch}.pkg"
+  val resourceDir = "${supportDir}/macos/resources"
+
+  inputs.dir(appDirName)
+  inputs.dir(resourceDir)
+  outputs.file(outputFile);
+
+  doFirst {
+    if (!OperatingSystem.current().isMacOsX) {
+      throw GradleException("This task runs on macOS only.")
+    }
+  }
+
+  doLast {
+    val params = listOf(
+        jPackage,
+        "--app-image", appDirName,
+        "--name", projectName,
+        "--app-version", appVersion,
+        "--dest", targetDir,
+        "--install-dir", "/Applications",
+        "--resource-dir", resourceDir,
+        "--type", "pkg",
+      )
+    func.runCommand(params, "Error while creating the PKG package")
+    val fromFile = "${targetDir}/${projectName}-${appVersion}.pkg"
+    val toFile = "${outputFile}"
+    func.copyFile(fromFile, toFile)
+    File(fromFile).delete()
+    func.verifyFileExists(outputFile);
+  }
+}
+
+/**
  * Task: genBuildInfo
  *
  * Generates Java class file with project information like current version, branch name, last commit hash etc.
@@ -853,6 +905,7 @@ tasks.register("createAll") {
   }
   if (OperatingSystem.current().isMacOsX) {
     dependsOn("createDmg")
+    dependsOn("createPkg")
   }
 }
 

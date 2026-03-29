@@ -69,6 +69,8 @@ include the Java runtime and do not require it to be installed separately:
   supported Linux distributions (also available in [Snapcraft store](https://snapcraft.io/logisim-evolution)),
 * `logisim-evolution-<version>-aarch64.msi`: Installer package for Microsoft Windows for Arm processors,
 * `logisim-evolution-<version>-amd64.msi`: Installer package for Microsoft Windows for Intel processors,
+* `logisim-evolution-<version>-aarch64.pkg`: macOS installer package for Apple processors,
+* `logisim-evolution-<version>-x86_64.pkg`: macOS installer package for Intel processors,
 * `logisim-evolution-<version>-aarch64.dmg`: macOS package for Apple processors,
 * `logisim-evolution-<version>-x86_64.dmg`: macOS package for Intel processors (also runs on Apple processors in simulation).
 
@@ -81,6 +83,8 @@ is also available and can be run on any system with a supported Java runtime ins
 
 **Note for macOS users**:
 The Logisim-evolution.app is not signed with an Apple approved certificate.
+
+If you install using the `.pkg` package, a `logisim-evolution` command wrapper is also installed to `/usr/local/bin`.
 
 When launching the application for the first time, you will have to start it via the "Open" entry in the
 application icon's context menu in the macOS Finder. This is either done by clicking the application

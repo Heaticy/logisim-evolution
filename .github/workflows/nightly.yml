@@ -293,13 +293,13 @@ jobs:
           java-version: ${{ env.JDK_VERSION }}
           distribution: ${{ env.JDK_DISTRO }}
 
-      - name: "Build aarch64 DMG"
+      - name: "Build aarch64 DMG and PKG"
         run: |
           # Have no mercy.
           set -euo pipefail
 
           chmod +x gradlew
-          ./gradlew createDmg -x checkstyleMain -x checkstyleTest
+          ./gradlew createDmg createPkg -x checkstyleMain -x checkstyleTest
 
       - name: 'Upload aarch64 DMG'
         uses: actions/upload-artifact@v6
@@ -308,6 +308,13 @@ jobs:
           path: build/dist/${{ needs.git_check.outputs.lse_name }}-${{ needs.git_check.outputs.lse_version }}-aarch64.dmg
           name: ${{ needs.git_check.outputs.base_name }}-aarch64.dmg
 
+      - name: 'Upload aarch64 PKG'
+        uses: actions/upload-artifact@v6
+        if: success()
+        with:
+          path: build/dist/${{ needs.git_check.outputs.lse_name }}-${{ needs.git_check.outputs.lse_version }}-aarch64.pkg
+          name: ${{ needs.git_check.outputs.base_name }}-aarch64.pkg
+
       - name: Set up x86_64 JDK ${{ env.JDK_VERSION }} ${{ env.JDK_DISTRO }}
         uses: actions/setup-java@v5
         with:
@@ -315,13 +322,13 @@ jobs:
           distribution: ${{ env.JDK_DISTRO }}
           architecture: "x64"
 
-      - name: "Build x86_64 DMG"
+      - name: "Build x86_64 DMG and PKG"
         run: |
           # Have no mercy.
           set -euo pipefail
 
           chmod +x gradlew
-          ./gradlew createDmg -x checkstyleMain -x checkstyleTest
+          ./gradlew createDmg createPkg -x checkstyleMain -x checkstyleTest
 
       - name: 'Upload x86_64 DMG'
         uses: actions/upload-artifact@v6
@@ -329,6 +336,13 @@ jobs:
         with:
           path: build/dist/${{ needs.git_check.outputs.lse_name }}-${{ needs.git_check.outputs.lse_version }}-x86_64.dmg
           name: ${{ needs.git_check.outputs.base_name }}-x86_64.dmg
+
+      - name: 'Upload x86_64 PKG'
+        uses: actions/upload-artifact@v6
+        if: success()
+        with:
+          path: build/dist/${{ needs.git_check.outputs.lse_name }}-${{ needs.git_check.outputs.lse_version }}-x86_64.pkg
+          name: ${{ needs.git_check.outputs.base_name }}-x86_64.pkg
 
   # ###############################################################################################
 
