@@ -924,6 +924,8 @@ tasks {
       excludedLocales.forEach { locale ->
         exclude("**/*_${locale}.properties")
         exclude("doc/${locale}/**")
+        exclude("doc/doc_${locale}.hs")
+        exclude("doc/map_${locale}.jhm")
       }
       filesMatching("resources/logisim/settings.properties") {
         filter { line -> filterLocalesLine(line, excludedLocales) }
