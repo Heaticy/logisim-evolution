@@ -70,7 +70,7 @@ jobs:
 
   build_macos:
     name: Build macOS Artifacts
-    runs-on: macos-13
+    runs-on: macos-latest
 
     steps:
       - name: Checkout sources
@@ -101,12 +101,14 @@ jobs:
       - build_linux
       - build_windows
       - build_macos
+    if: ${{ always() && (needs.build_linux.result == 'success' || needs.build_windows.result == 'success' || needs.build_macos.result == 'success') }}
 
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
+          merge-multiple: true
 
       - name: Show release files
         run: find release-artifacts -type f | sort
@@ -114,6 +116,6 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/**/*.*
+          files: release-artifacts/*
           generate_release_notes: true
           prerelease: false
