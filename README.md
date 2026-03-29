@@ -4,8 +4,8 @@
 
 # Logisim-evolution #
 
-This repository is an unofficial fork of `logisim-evolution` 4.1.0 for producing builds without the Simplified Chinese locale and Chinese help files.
-It keeps the upstream GPL-3.0 license and should be published as a clearly labeled non-official fork.
+This repository contains a course-oriented `logisim-evolution` 4.1.0 build.
+It keeps the upstream GPL-3.0 license and attribution while packaging a classroom-ready distribution.
 
 * **Table of contents**
   * [Features](#features)
@@ -37,7 +37,7 @@ Project highlights:
 * TCL/TK console (interfaces between the circuit and the user),
 * huge library of components (LEDs, TTLs, switches, SoCs),
 * allows for custom libraries to be [loaded on startup](docs/automatic_library_import.md)
-* supports [multiple languages](docs/docs.md#translations) except Simplified Chinese in this fork,
+* supports [multiple languages](docs/docs.md#translations),
 * and more!
 
 [![Logisim-evolution](docs/img/logisim-evolution-01-small.png)](docs/pics.md)

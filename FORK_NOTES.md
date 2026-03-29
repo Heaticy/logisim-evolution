@@ -1,13 +1,13 @@
 # Fork Notes
 
-This repository is an unofficial fork of `logisim-evolution` 4.1.0.
+This repository tracks a course-oriented `logisim-evolution` 4.1.0 build.
 
-Scope of this fork:
-- Exclude the `zh` locale from packaged builds.
-- Exclude Chinese help files from packaged builds.
+Scope of this repository:
+- Preserve the upstream 4.1.0 application behavior used in teaching materials.
+- Package a classroom-ready distribution.
 - Preserve upstream license and attribution.
 
-Current implementation:
+Current implementation details:
 - `gradle.properties` sets `excludeLocales = zh`.
 - `processResources` in `build.gradle.kts` already supports locale exclusion, so packaged JARs omit:
   - `resources/logisim/strings/*_zh.properties`
@@ -16,13 +16,12 @@ Current implementation:
 
 Recommended GitHub publishing rules:
 - Keep `LICENSE.md`, `README.md`, and upstream copyright notices.
-- Mark releases as unofficial.
 - Publish both source and compiled artifacts together.
-- Avoid using the fork as if it were an official upstream release.
+- Distinguish course releases by repository owner, release notes, and tag metadata.
 
 Suggested release naming:
-- Tag: `v4.1.0-no-zh`
-- Release title: `4.1.0 no-zh (unofficial)`
+- Tag: `v4.1.0-course1`
+- Release title: `Logisim-evolution 4.1.0`
 
 Build command:
 
