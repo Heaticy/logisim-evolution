@@ -507,6 +507,7 @@ tasks.register("createMsi") {
   dependsOn("createPackageInput", "createNeededJavaModules")
 
   val supportDir = ext.get(SUPPORT_DIR) as String
+  val windowsResourceDir = "${supportDir}/windows/resources"
   val osArch = ext.get(OS_ARCH) as String
   val projectName = project.name
   val sharedParams = (ext.get(SHARED_PARAMS) as List<Any?>).filterIsInstance<String>()
@@ -530,8 +531,10 @@ tasks.register("createMsi") {
     val params = sharedParams + func.getNeededModules(jdepsFile) + listOf(
         "--name", projectName,
         "--dest", targetDir,
+        "--add-launcher", "logisim=${supportDir}/windows/logisim.properties",
         "--file-associations", "${supportDir}/windows/file.jpackage",
         "--icon", "${supportDir}/windows/Logisim-evolution.ico",
+        "--resource-dir", windowsResourceDir,
         "--win-menu-group", projectName,
         "--win-shortcut",
         "--win-dir-chooser",
@@ -563,6 +566,7 @@ tasks.register("createExe") {
   dependsOn("createPackageInput", "createNeededJavaModules")
 
   val supportDir = ext.get(SUPPORT_DIR) as String
+  val windowsResourceDir = "${supportDir}/windows/resources"
   val buildDir = ext.get(BUILD_DIR) as String
   val osArch = ext.get(OS_ARCH) as String
   val projectName = project.name
@@ -588,7 +592,9 @@ tasks.register("createExe") {
     val params = sharedParams + func.getNeededModules(jdepsFile) + listOf(
         "--name", projectName,
         "--dest", dest,
+        "--add-launcher", "logisim=${supportDir}/windows/logisim.properties",
         "--icon", "${supportDir}/windows/Logisim-evolution.ico",
+        "--resource-dir", windowsResourceDir,
         "--type", "app-image",
         // we MUST use short version form (without any suffix like "-dev", as it is not allowed in MSI package:
         // https://docs.microsoft.com/en-us/windows/win32/msi/productversion?redirectedfrom=MSDN
