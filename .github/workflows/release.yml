@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  JDK_VERSION: "21"
+  JDK_DISTRO: "temurin"
+
+jobs:
+  build_linux:
+    name: Build Linux Artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: ${{ env.JDK_DISTRO }}
+
+      - name: Build jar and deb
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew shadowJar createDeb
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            build/libs/*-all.jar
+            build/dist/*.deb
+
+  build_windows:
+    name: Build Windows Artifacts
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: ${{ env.JDK_DISTRO }}
+
+      - name: Build msi
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew.bat createMsi
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: build/dist/*.msi
+
+  build_macos:
+    name: Build macOS Artifacts
+    runs-on: macos-13
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: ${{ env.JDK_DISTRO }}
+
+      - name: Build dmg
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew createDmg
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: build/dist/*.dmg
+
+  publish_release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs:
+      - build_linux
+      - build_windows
+      - build_macos
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Show release files
+        run: find release-artifacts -type f | sort
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*.*
+          generate_release_notes: true
+          prerelease: false
