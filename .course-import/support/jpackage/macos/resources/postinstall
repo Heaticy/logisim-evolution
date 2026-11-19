@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -e
+
+app_binary="/Applications/Logisim-evolution.app/Contents/MacOS/Logisim-evolution"
+launcher_path="/usr/local/bin/logisim-evolution"
+
+mkdir -p "/usr/local/bin"
+
+cat > "${launcher_path}" <<'EOF'
+#!/bin/sh
+exec "/Applications/Logisim-evolution.app/Contents/MacOS/Logisim-evolution" "$@"
+EOF
+
+chmod 755 "${launcher_path}"
+
+exit 0

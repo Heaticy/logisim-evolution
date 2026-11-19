@@ -1,0 +1,24 @@
+#!/bin/sh
+# postrm script for APPLICATION_PACKAGE
+#
+# see: dh_installdeb(1)
+
+set -e
+
+launcher_path="/usr/bin/logisim-evolution"
+target_path="/opt/logisim-evolution/bin/logisim-evolution"
+
+case "$1" in
+    purge|remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        if [ -L "${launcher_path}" ] && [ "$(readlink "${launcher_path}")" = "${target_path}" ]; then
+            rm -f "${launcher_path}"
+        fi
+    ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

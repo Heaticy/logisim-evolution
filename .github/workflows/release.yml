@@ -2,140 +2,123 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-env:
-  JDK_VERSION: "21"
-  JDK_DISTRO: "temurin"
+  contents: read
 
 jobs:
-  build_linux:
-    name: Build Linux Artifacts
-    runs-on: ubuntu-latest
-
+  linux:
+    name: Linux and JAR
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
-          java-version: ${{ env.JDK_VERSION }}
-          distribution: ${{ env.JDK_DISTRO }}
-
-      - name: Build jar and deb
+          java-version: "21"
+          distribution: temurin
+      - name: Run tests and build
+        run: ./gradlew test shadowJar createDeb
+      - name: Verify English on a Chinese locale and launch at 2×
+        shell: bash
         run: |
           set -euo pipefail
-          chmod +x gradlew
-          ./gradlew shadowJar createDeb
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+          jar=$(find build/libs -name '*-all.jar' -print -quit)
+          unzip -p "$jar" resources/logisim/settings.properties | grep '^locales.*\ben\b'
+          if unzip -p "$jar" resources/logisim/settings.properties | grep -Eq '^locales.*\bzh\b'; then
+            exit 1
+          fi
+          unzip -Z1 "$jar" > build/course-jar-files.txt
+          if grep -E '(_zh(_[^/]*)?\.properties$|^doc/(zh/|doc_zh\.hs|map_zh\.jhm|search_lookup_zh/))' build/course-jar-files.txt; then
+            exit 1
+          fi
+          java -Duser.language=zh -Duser.country=CN -Djava.awt.headless=true -jar "$jar" --help > build/course-help.txt
+          grep -i 'usage:' build/course-help.txt
+          sudo dpkg -i build/dist/*.deb
+          test -x /usr/bin/logisim-evolution
+          xvfb-run -a -s '-screen 0 1920x1080x24' bash -euc '
+            java -Duser.language=zh -Duser.country=CN -Dsun.java2d.uiScale=2 -jar "$1" > build/course-gui.log 2>&1 &
+            app_pid=$!
+            trap "kill $app_pid 2>/dev/null || true" EXIT
+            for attempt in {1..30}; do
+              if xwininfo -root -tree | grep -qi "Logisim-evolution"; then
+                exit 0
+              fi
+              kill -0 "$app_pid"
+              sleep 1
+            done
+            cat build/course-gui.log
+            exit 1
+          ' bash "$jar"
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-artifacts
+          if-no-files-found: error
           path: |
             build/libs/*-all.jar
             build/dist/*.deb
 
-  build_windows:
-    name: Build Windows Artifacts
-    runs-on: windows-latest
-
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
-          java-version: ${{ env.JDK_VERSION }}
-          distribution: ${{ env.JDK_DISTRO }}
-
-      - name: Build msi
-        shell: bash
+          java-version: "21"
+          distribution: temurin
+      - name: Build MSI and portable ZIP
+        shell: pwsh
         run: |
-          set -euo pipefail
-          ./gradlew.bat createMsi
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+          & .\gradlew.bat createMsi createWindowsPortableZip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify MSI installation and commands
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem build/dist/*.msi -ErrorAction Stop).FullName
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"{0}"' -f $msi), '/qn', '/norestart') -Wait -PassThru
+          if ($install.ExitCode -notin @(0, 3010)) { throw "MSI install failed with $($install.ExitCode)" }
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+          foreach ($launcher in @('logisim-evolution.exe', 'logisim.exe')) {
+            Get-Command $launcher -CommandType Application -ErrorAction Stop | Select-Object -ExpandProperty Source
+          }
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
-          path: build/dist/*.msi
+          if-no-files-found: error
+          path: |
+            build/dist/*.msi
+            build/dist/*.zip
 
-  build_macos:
-    name: Build macOS Artifacts
-    runs-on: macos-latest
-
+  macos:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: aarch64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v6
-
-      - name: Set up aarch64 JDK
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
-          java-version: ${{ env.JDK_VERSION }}
-          distribution: ${{ env.JDK_DISTRO }}
-
-      - name: Build aarch64 dmg and pkg
+          java-version: "21"
+          distribution: temurin
+      - name: Build macOS packages
+        run: ./gradlew createDmg createPkg
+      - name: Verify command installed by PKG
         run: |
-          set -euo pipefail
-          chmod +x gradlew
-          ./gradlew createDmg createPkg
-
-      - name: Set up x86_64 JDK
-        uses: actions/setup-java@v5
+          sudo installer -pkg build/dist/*.pkg -target /
+          test "$(command -v logisim-evolution)" = /usr/local/bin/logisim-evolution
+          test -x /Applications/Logisim-evolution.app/Contents/MacOS/Logisim-evolution
+      - uses: actions/upload-artifact@v4
         with:
-          java-version: ${{ env.JDK_VERSION }}
-          distribution: ${{ env.JDK_DISTRO }}
-          architecture: x64
-
-      - name: Build x86_64 dmg and pkg
-        run: |
-          set -euo pipefail
-          chmod +x gradlew
-          ./gradlew createDmg createPkg
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-artifacts
+          name: macos-${{ matrix.arch }}-artifacts
+          if-no-files-found: error
           path: |
             build/dist/*.dmg
             build/dist/*.pkg
-
-  publish_release:
-    name: Publish Release
-    runs-on: ubuntu-latest
-    needs:
-      - build_linux
-      - build_windows
-      - build_macos
-    if: ${{ always() && (needs.build_linux.result == 'success' || needs.build_windows.result == 'success' || needs.build_macos.result == 'success') }}
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-          merge-multiple: true
-
-      - name: Show release files
-        run: find release-artifacts -type f | sort
-
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release-artifacts/**/*.jar
-            release-artifacts/**/*.deb
-            release-artifacts/*.msi
-            release-artifacts/*.dmg
-            release-artifacts/*.pkg
-          generate_release_notes: true
-          prerelease: false

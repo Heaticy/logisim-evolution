@@ -1,0 +1,37 @@
+name: Prepare SI100B 5.0.0
+on:
+  push:
+    branches: [si100b-5.0-prep]
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Import pinned upstream release
+        shell: bash
+        run: |
+          set -euo pipefail
+          old_main=68d3f2321256c7aab9172e2b1ad31c7edb05f13c
+          upstream=7c3343e134c6a1c304e5531ace503b01273d7fbc
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$old_main"
+          git -c credential.helper= fetch --depth=1 --no-tags https://github.com/logisim-evolution/logisim-evolution.git refs/tags/v5.0.0:refs/tags/upstream-v5.0.0
+          test "$(git rev-parse 'upstream-v5.0.0^{commit}')" = "$upstream"
+          payload=$(mktemp -d)
+          cp -a .course-import/. "$payload/"
+          cp .github/workflows/release.yml "$payload/release.yml"
+          git switch --create si100b-5.0-source "$old_main"
+          git read-tree --reset -u "$upstream"
+          git restore --source="$old_main" --staged --worktree -- .github/workflows
+          cp "$payload/release.yml" .github/workflows/release.yml
+          for path in README.md FORK_NOTES.md build.gradle.kts gradle.properties src support; do
+            cp -a "$payload/$path" .
+          done
+          git add -A
+          git diff --cached --check -- build.gradle.kts gradle.properties .github/workflows/release.yml FORK_NOTES.md
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Upgrade the SI100B course build to Logisim-evolution 5.0.0' -m "Upstream: logisim-evolution/logisim-evolution@$upstream"
+          git push origin HEAD:refs/heads/si100b-5.0-source
