@@ -31,6 +31,7 @@ jobs:
           for path in README.md FORK_NOTES.md build.gradle.kts gradle.properties src support; do
             cp -a "$payload/$path" .
           done
+          git apply "$payload/hidpi.patch"
           git add -A
           git diff --cached --check -- build.gradle.kts gradle.properties .github/workflows/release.yml FORK_NOTES.md
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Upgrade the SI100B course build to Logisim-evolution 5.0.0' -m "Upstream: logisim-evolution/logisim-evolution@$upstream"

@@ -1,0 +1,47 @@
+diff --git a/src/main/java/com/cburch/logisim/Main.java b/src/main/java/com/cburch/logisim/Main.java
+--- a/src/main/java/com/cburch/logisim/Main.java
++++ b/src/main/java/com/cburch/logisim/Main.java
+@@ -63,10 +63,9 @@ public static void main(String[] args) {
+           UIManager.put(
+               "Tree.font",
+             new FontUIResource("SansSerif", Font.BOLD, AppPreferences.getScaled(12)));
+-          // don't need this
+-          // UIManager.put(
+-          //     "Label.font",
+-          //   new FontUIResource("SansSerif", Font.BOLD, AppPreferences.getScaled(12)));
++          UIManager.put(
++              "MenuItem.acceleratorFont",
++            new FontUIResource("SansSerif", Font.PLAIN, AppPreferences.getScaled(12)));
+         }
+       }
+     } catch (ClassNotFoundException
+@@ -137,5 +136,7 @@ private static void updateGlobalFont(String appFont) {
+ 
+     UIManager.put("ToolTip.font",
+         new FontUIResource(appFont, AppPreferences.getPreferredFontStyle(appFont), AppPreferences.getScaled(12)));
++    UIManager.put("MenuItem.acceleratorFont",
++        new FontUIResource(appFont, AppPreferences.getPreferredFontStyle(appFont), AppPreferences.getScaled(12)));
+   }
+ }
+diff --git a/src/main/java/com/cburch/logisim/gui/main/Canvas.java b/src/main/java/com/cburch/logisim/gui/main/Canvas.java
+--- a/src/main/java/com/cburch/logisim/gui/main/Canvas.java
++++ b/src/main/java/com/cburch/logisim/gui/main/Canvas.java
+@@ -105,6 +105,7 @@ public class Canvas extends JPanel implements LocaleListener, CanvasPaneContents
+   private static final Color SINGLE_STEP_MSG_COLOR = Color.BLUE;
+   private static final Font SINGLE_STEP_MSG_FONT = new Font("Sans Serif", Font.BOLD, 12);
+   public static final Color DEFAULT_ZOOM_BUTTON_COLOR = Color.WHITE;
++  private static final float FONT_SIZE = 12f;
+   // public static BufferedImage image;
+   private final Project proj;
+   private final Selection selection;
+@@ -137,6 +138,10 @@ public Canvas(Project proj) {
+     this.autoPanTimer = new Timer(AUTO_PAN_DELAY, event -> autoPanPreview());
+     this.autoPanTimer.setCoalesce(true);
+ 
++    // font size scales with OS display scaling on some OSes (not Windows)
++    // so force a fixed font size, without forcing a whole font
++    this.setFont(this.getFont().deriveFont(FONT_SIZE));
++
+     setBackground(new Color(AppPreferences.CANVAS_BG_COLOR.get()));
+     addMouseListener(myListener);
+     addMouseMotionListener(myListener);
