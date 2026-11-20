@@ -42,8 +42,11 @@ jobs:
               pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth xorg-xwininfo ttf-dejavu
               pacman -U --noconfirm /work/logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst
               [[ "$(command -v logisim-evolution)" == /usr/bin/logisim-evolution ]]
-              logisim-evolution --help > /tmp/logisim-help.txt
-              grep -i "usage:" /tmp/logisim-help.txt
+              if ! logisim-evolution --help > /tmp/logisim-help.txt 2>&1; then
+                cat /tmp/logisim-help.txt
+                exit 1
+              fi
+              cat /tmp/logisim-help.txt
               Xvfb :42 -screen 0 1920x1080x24 > /tmp/xvfb.log 2>&1 &
               display_pid=$!
               trap "kill $display_pid 2>/dev/null || true" EXIT

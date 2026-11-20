@@ -12,7 +12,11 @@ options=('!strip' '!debug')
 package() {
     install -d "$pkgdir/opt" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications"
     cp -a "$startdir/deb-root/opt/logisim-evolution" "$pkgdir/opt/"
-    ln -s /opt/logisim-evolution/bin/logisim-evolution "$pkgdir/usr/bin/logisim-evolution"
+    cat > "$pkgdir/usr/bin/logisim-evolution" <<'LAUNCHER'
+#!/bin/sh
+exec /opt/logisim-evolution/bin/logisim-evolution "$@"
+LAUNCHER
+    chmod 755 "$pkgdir/usr/bin/logisim-evolution"
     local desktop
     desktop=$(find "$startdir/deb-root/opt/logisim-evolution" -type f -name '*.desktop' -print -quit)
     test -f "$desktop"
