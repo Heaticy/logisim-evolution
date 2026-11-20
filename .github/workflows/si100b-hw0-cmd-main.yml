@@ -1,0 +1,33 @@
+name: Test the HW0 batch script from the student ZIP
+on:
+  push:
+    branches: [si100b-hw0-gui-script-check]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2022
+    steps:
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Join-Path $env:RUNNER_TEMP 'logisim-evolution-5.0.0-amd64.msi'
+          Invoke-WebRequest 'https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/logisim-evolution-5.0.0-amd64.msi' -OutFile $msi
+          if ((Get-FileHash $msi).Hash -ne 'd3aff607d21a056a6240b890272428e7d7b362407001ac4b1e38e1235f6bebd9') { throw 'MSI hash mismatch.' }
+          $p = Start-Process msiexec.exe -ArgumentList @('/i', ('"{0}"' -f $msi), '/qn', '/norestart') -Wait -PassThru
+          if ($p.ExitCode -notin @(0,3010)) { throw "MSI installation failed: $($p.ExitCode)" }
+          $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')
+          $zip = Join-Path $env:RUNNER_TEMP 'hw0.zip'
+          $folder = Join-Path $env:RUNNER_TEMP 'SI100B HW0 From ZIP'
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/4fafe95845be9d37d15ba8826e77f9f1405552fa6bef2bfab00c349355772f73/SI100B-HW0-Student.zip' -OutFile $zip
+          if ((Get-FileHash $zip).Hash -ne '4fafe95845be9d37d15ba8826e77f9f1405552fa6bef2bfab00c349355772f73') { throw 'Student ZIP hash mismatch.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $folder
+          $script = Join-Path $folder 'self-test.cmd'
+          $result = & cmd.exe /d /c ('call "{0}"' -f $script)
+          $exit = $LASTEXITCODE
+          $result | Write-Output
+          $text = $result -join "`n"
+          if ($exit -ne 0 -or $text -notmatch '(?m)^NAND1_PASS\s+NOR1_PASS\s+XOR1_PASS\s+MUX2_PASS\s+MUX4_PASS' -or $text -notmatch '(?m)^\s*0\s+0\s+0\s+0\s+0\s*$') {
+            throw 'The Windows script did not return the expected five blank-circuit results.'
+          }
+          exit 0
