@@ -42,6 +42,10 @@ jobs:
           grep -i 'usage:' build/course-help.txt
           sudo dpkg -i build/dist/*.deb
           test -x /usr/bin/logisim-evolution
+          if ! command -v xwininfo >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y x11-utils
+          fi
           xvfb-run -a -s '-screen 0 1920x1080x24' bash -euc '
             java -Duser.language=zh -Duser.country=CN -Dsun.java2d.uiScale=2 -jar "$1" > build/course-gui.log 2>&1 &
             app_pid=$!
@@ -150,7 +154,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd release-assets
+          asset_root="$PWD/release-assets"
+          stage_dir=$(mktemp -d)
+          cd "$stage_dir"
           expected=(
             logisim-evolution-5.0.0-all.jar
             logisim-evolution_5.0.0_amd64.deb
@@ -161,7 +167,12 @@ jobs:
             logisim-evolution-5.0.0-x86_64.dmg
             logisim-evolution-5.0.0-x86_64.pkg
           )
-          for package in "${expected[@]}"; do test -s "$package"; done
+          for package in "${expected[@]}"; do
+            mapfile -d '' matches < <(find "$asset_root" -type f -name "$package" -print0)
+            test "${#matches[@]}" -eq 1
+            test -s "${matches[0]}"
+            cp -- "${matches[0]}" "$package"
+          done
           sha256sum "${expected[@]}" > SHA256SUMS
           cat > release-notes.md <<'MD'
           SI100B course edition based on Logisim-evolution 5.0.0. The interface starts in English and the Chinese translations are excluded. This build includes the upstream HiDPI fix for oversized canvas text.
