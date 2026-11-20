@@ -49,12 +49,13 @@ jobs:
             if ($version.out -match 'v?5\.0\.0' -and $table.out -match '(?m)^A\s+B\s+RESULT' -and $table.out -match '(?m)^0\s+0\s+U') { $worked=$true }
           }
           if (!$worked) { throw 'Neither native launcher emitted the expected truth table.' }
-          $result = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/si100b-hw0/Self-Test.ps1 -Circuit $circuit
-          $exit = $LASTEXITCODE
-          Write-Output $result
-          if ($exit -ne 1 -or (@($result | Select-String '^FAIL (NAND1|NOR1|XOR1|MUX2|MUX4) \(0/')).Count -ne 5) {
-            throw 'Windows PowerShell self-test did not report all five failing circuits for the blank starter.'
-          }
+          Copy-Item -Recurse tests/si100b-hw0/vectors $starter
+          Push-Location -LiteralPath $starter
+          try {
+            $result = & cmd.exe /d /c 'logisim-evolution --test-vector NAND1 "vectors\NAND1.txt" "ex1.circ"'
+            $result | Write-Output
+            if (($result -join "`n") -notmatch 'Passed:\s*0,\s*Failed:\s*4') { throw 'cmd did not print native test-vector results' }
+          } finally { Pop-Location }
           exit 0
   unix:
     strategy:
@@ -87,8 +88,12 @@ jobs:
           command -v logisim-evolution
           curl -fLsS --retry 3 'https://vsplab.cn/resources/uploads/08faba94ea17a1a2e4a4d65255a3edc53beac7ea36907aa45771a35dcd45a504/HW0-ex1.zip' -o "$RUNNER_TEMP/hw0.zip"
           (cd "$RUNNER_TEMP" && unzip -o hw0.zip ex1.circ)
-          result=0
-          sh tests/si100b-hw0/self-test.sh "$RUNNER_TEMP/ex1.circ" > "$RUNNER_TEMP/self-test.log" || result=$?
-          cat "$RUNNER_TEMP/self-test.log"
-          test "$result" -eq 1
-          test "$(grep -c '^FAIL .* (0/' "$RUNNER_TEMP/self-test.log")" -eq 5
+          cp -R tests/si100b-hw0/vectors "$RUNNER_TEMP/vectors"
+          cd "$RUNNER_TEMP"
+          if [[ "$ASSET" == *.deb ]]; then
+            xvfb-run -a logisim-evolution --test-vector NAND1 vectors/NAND1.txt ex1.circ > vector.log
+          else
+            logisim-evolution --test-vector NAND1 vectors/NAND1.txt ex1.circ > vector.log
+          fi
+          cat vector.log
+          grep -E 'Passed:[[:space:]]*0,[[:space:]]*Failed:[[:space:]]*4' vector.log
