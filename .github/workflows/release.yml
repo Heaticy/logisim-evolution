@@ -93,8 +93,10 @@ jobs:
           $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"{0}"' -f $msi), '/qn', '/norestart') -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) { throw "MSI install failed with $($install.ExitCode)" }
           $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-          foreach ($launcher in @('logisim-evolution.exe', 'logisim.exe')) {
-            Get-Command $launcher -CommandType Application -ErrorAction Stop | Select-Object -ExpandProperty Source
+          $command = Get-Command 'logisim-evolution.exe' -CommandType Application -ErrorAction Stop
+          $command | Select-Object -ExpandProperty Source
+          if (Test-Path (Join-Path (Split-Path $command.Source) 'logisim.exe')) {
+            throw 'Unexpected secondary launcher.'
           }
       - uses: actions/upload-artifact@v4
         with:
@@ -177,7 +179,7 @@ jobs:
           cat > release-notes.md <<'MD'
           SI100B course edition based on Logisim-evolution 5.0.0. The interface starts in English and the Chinese translations are excluded. This build includes the upstream HiDPI fix for oversized canvas text.
 
-          - **Windows (x64)**: The MSI adds `logisim-evolution` and `logisim` to PATH. Open a new terminal after installation. A portable ZIP is also available.
+          - **Windows (x64)**: The MSI adds `logisim-evolution` to PATH. Open a new terminal after installation. A portable ZIP is also available.
           - **macOS**: Choose the PKG for Apple Silicon (`aarch64`) or Intel (`x86_64`) to install the `logisim-evolution` command. The DMG is also available.
           - **Linux**: Use the Debian/Ubuntu x64 package or the cross-platform JAR. The JAR requires Java 21 or newer.
 

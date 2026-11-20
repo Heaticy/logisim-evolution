@@ -664,7 +664,6 @@ tasks.register("createMsi") {
     val params = sharedParams + func.getNeededModules(jdepsFile) + listOf(
         "--name", projectName,
         "--dest", targetDir,
-        "--add-launcher", "logisim=${supportDir}/windows/logisim.properties",
         "--file-associations", "${supportDir}/windows/file.jpackage",
         "--icon", "${supportDir}/windows/Logisim-evolution.ico",
         "--resource-dir", windowsResourceDir,
@@ -725,7 +724,6 @@ tasks.register("createExe") {
     val params = sharedParams + func.getNeededModules(jdepsFile) + listOf(
         "--name", projectName,
         "--dest", dest,
-        "--add-launcher", "logisim=${supportDir}/windows/logisim.properties",
         "--icon", "${supportDir}/windows/Logisim-evolution.ico",
         "--resource-dir", windowsResourceDir,
         "--type", "app-image",

@@ -11,7 +11,7 @@ from [PR #3122](https://github.com/logisim-evolution/logisim-evolution/pull/3122
 The macOS PKG installs the application into `/Applications` and supplies
 `/usr/local/bin/logisim-evolution`. On Windows the MSI adds the installation
 directory to the current user's PATH. In a new terminal, Windows users can run
-`logisim-evolution` or `logisim`. The Debian package installs
+`logisim-evolution`. The Debian package installs
 `/usr/bin/logisim-evolution`. The DMG, portable ZIP and JAR are alternatives to
 the installers.
 
