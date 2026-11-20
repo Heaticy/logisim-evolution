@@ -23,6 +23,7 @@ import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Locale;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.plaf.FontUIResource;
@@ -39,6 +40,8 @@ public class Main {
     // or uncomment next line
     // System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
 
+    // Start in English before Swing or Logisim loads localized resources.
+    Locale.setDefault(Locale.ENGLISH);
     System.setProperty("apple.awt.application.name", BuildInfo.name);
     try {
       if (!GraphicsEnvironment.isHeadless()) {
@@ -50,6 +53,7 @@ public class Main {
         FlatMacDarkLaf.installLafInfo();
         
         UIManager.setLookAndFeel(AppPreferences.LookAndFeel.get());
+        AppPreferences.applyThemeColors();
         
         // Apply global font preference
         final var appFont = AppPreferences.APP_FONT.get();
@@ -59,6 +63,12 @@ public class Main {
           UIManager.put(
               "ToolTip.font",
             new FontUIResource("SansSerif", Font.BOLD, AppPreferences.getScaled(12)));
+          UIManager.put(
+              "Tree.font",
+            new FontUIResource("SansSerif", Font.BOLD, AppPreferences.getScaled(12)));
+          UIManager.put(
+              "MenuItem.acceleratorFont",
+              new FontUIResource("SansSerif", Font.PLAIN, AppPreferences.getScaled(12)));
         }
       }
     } catch (ClassNotFoundException
@@ -127,7 +137,9 @@ public class Main {
       }
     }
 
-    UIManager.put("ToolTip.font", 
-        new FontUIResource(appFont, AppPreferences.getPreferredFontStyle(appFont), AppPreferences.getScaled(12)));
+    final var style = AppPreferences.getPreferredFontStyle(appFont);
+    final var size = AppPreferences.getScaled(12);
+    UIManager.put("ToolTip.font", new FontUIResource(appFont, style, size));
+    UIManager.put("MenuItem.acceleratorFont", new FontUIResource(appFont, style, size));
   }
 }

@@ -19,6 +19,7 @@ import com.cburch.logisim.util.TableLayout;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.Objects;
@@ -30,6 +31,7 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSlider;
 import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.UnsupportedLookAndFeelException;
@@ -55,6 +57,8 @@ class WindowOptions extends OptionsPanel {
   private final JLabel componentColorTitle;
   private final ColorChooserButton componentIconColor;
   private final JLabel componentIconColorTitle;
+  private final ColorChooserButton textToolColor;
+  private final JLabel textToolColorTitle;
   private final JButton gridColorsResetButton;
 
   private final ZoomSlider zoomValue;
@@ -64,15 +68,14 @@ class WindowOptions extends OptionsPanel {
   private final JLabel restartWarning;
   private final JLabel restartWarningSpacer;
   private final JLabel zoomLabel;
-  private final JLabel importantA;
-  private final JTextArea importantB;
-  private final JPanel previewContainer;
+  private final JTextArea zoomFactorImportant;
   private final JComboBox<String> lookAndFeel;
+  private final JLabel editorThemeLabel;
+  private final JComboBox<String> editorTheme;
   private final JComboBox<String> appFont;
   private final LookAndFeelInfo[] lookAndFeelInfos;
-  private JPanel previewPanel;
   private int index = 0;
-  
+
   private String initialAppFont;
   private String initialLookAndFeel;
 
@@ -88,7 +91,10 @@ class WindowOptions extends OptionsPanel {
 
     checks =
         new PrefBoolean[] {
+          new PrefBoolean(AppPreferences.UI_ANTIALIASING, S.getter("layoutAntiAliasing")),
           new PrefBoolean(AppPreferences.SHOW_TICK_RATE, S.getter("windowTickRate")),
+          new PrefBoolean(
+              AppPreferences.SEARCH_DOUBLE_SHIFT, S.getter("windowSearchDoubleShift")),
         };
 
     canvasPlacement =
@@ -142,6 +148,10 @@ class WindowOptions extends OptionsPanel {
     componentIconColor = new ColorChooserButton(window, AppPreferences.COMPONENT_ICON_COLOR);
     panel.add(componentIconColorTitle);
     panel.add(componentIconColor);
+    textToolColorTitle = new JLabel(S.get("windowTextToolColor"));
+    textToolColor = new ColorChooserButton(window, AppPreferences.TEXT_TOOL_COLOR);
+    panel.add(textToolColorTitle);
+    panel.add(textToolColor);
 
     gridColorsResetButton = new JButton();
     gridColorsResetButton.addActionListener(listener);
@@ -152,14 +162,12 @@ class WindowOptions extends OptionsPanel {
 
     panel.add(new JLabel(" "));
     panel.add(new JLabel(" "));
+    panel.add(new JLabel(" "));
 
-    importantA = new JLabel(S.get("windowToolbarPleaserestart"));
-    importantA.setFont(importantA.getFont().deriveFont(Font.ITALIC));
-    panel.add(importantA);
-
-    importantB = new JTextArea(S.get("windowToolbarImportant"));
-    importantB.setFont(importantB.getFont().deriveFont(Font.ITALIC));
-    panel.add(importantB);
+    zoomFactorImportant = new JTextArea(S.get("windowToolbarImportant"));
+    zoomFactorImportant.setFont(zoomFactorImportant.getFont().deriveFont(Font.ITALIC));
+    zoomFactorImportant.setEditable(false);
+    panel.add(zoomFactorImportant);
 
     zoomLabel = new JLabel(S.get("windowToolbarZoomfactor"));
     zoomValue =
@@ -188,16 +196,27 @@ class WindowOptions extends OptionsPanel {
         lookAndFeel.setSelectedIndex(index = i);
       }
     }
-    
+
+    editorTheme = new JComboBox<>();
+    editorTheme.addItem("Default");
+    editorTheme.addItem("Dark");
+    editorTheme.addItem("Monokai");
+    editorTheme.addItem("Eclipse");
+    editorTheme.addItem("IDEA");
+    editorTheme.addItem("Visual Studio");
+    editorTheme.addItem("Druid");
+    updateEditorThemeSelection();
+    editorThemeLabel = new JLabel(S.get("windowEditorTheme"));
+
     appFont = new JComboBox<>();
     appFont.addItem(S.get("windowAppFontDefault"));
     for (String f : GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()) {
       appFont.addItem(f);
     }
     initialAppFont = AppPreferences.APP_FONT.get();
-    appFont.setSelectedItem((initialAppFont == null || initialAppFont.isEmpty()) 
+    appFont.setSelectedItem((initialAppFont == null || initialAppFont.isEmpty())
         ? S.get("windowAppFontDefault") : initialAppFont);
-        
+
     appFontLabel = new JLabel(S.get("windowAppFont"));
 
     // Add components
@@ -205,6 +224,10 @@ class WindowOptions extends OptionsPanel {
     panel.add(lookfeelLabel);
     panel.add(lookAndFeel);
     lookAndFeel.addActionListener(listener);
+
+    panel.add(editorThemeLabel);
+    panel.add(editorTheme);
+    editorTheme.addActionListener(listener);
 
     panel.add(appFontLabel);
     panel.add(appFont);
@@ -214,18 +237,12 @@ class WindowOptions extends OptionsPanel {
     restartWarning.setFont(restartWarning.getFont().deriveFont(Font.ITALIC));
     restartWarning.setIcon(UIManager.getIcon("OptionPane.warningIcon"));
     restartWarning.setVisible(false);
-    
+
     restartWarningSpacer = new CollapsibleLabel(" ");
     restartWarningSpacer.setVisible(false);
 
     panel.add(restartWarningSpacer);
     panel.add(restartWarning);
-
-    final var previewLabel = new JLabel(S.get("windowToolbarPreview"));
-    panel.add(previewLabel);
-    previewContainer = new JPanel();
-    panel.add(previewContainer);
-    initThemePreviewer();
 
     setLayout(new TableLayout(1));
     resetWindowLayoutButton = new JButton();
@@ -239,25 +256,40 @@ class WindowOptions extends OptionsPanel {
     add(panel);
   }
 
-  private void initThemePreviewer() {
-    if (previewPanel != null) previewContainer.remove(previewPanel);
-    javax.swing.LookAndFeel previousLF = UIManager.getLookAndFeel();
+  private void applyLookAndFeelGlobally(String lafClassName) {
     try {
-      UIManager.setLookAndFeel(AppPreferences.LookAndFeel.get());
-      previewPanel = new JPanel();
-      previewPanel.add(new JButton("Preview"));
-      previewPanel.add(new JCheckBox("Preview"));
-      previewPanel.add(new JRadioButton("Preview"));
-      previewPanel.add(new JComboBox<>(new String[]{"Preview 1", "Preview 2"}));
-      previewContainer.add(previewPanel);
-      UIManager.setLookAndFeel(previousLF);
+      UIManager.setLookAndFeel(lafClassName);
+      for (final var win : Window.getWindows()) {
+        SwingUtilities.updateComponentTreeUI(win);
+      }
+      // Rebuild default circuit appearances to pick up new component colors
+      for (final var proj : Projects.getOpenProjects()) {
+        for (final var circuit : proj.getLogisimFile().getCircuits()) {
+          if (circuit.getAppearance().isDefaultAppearance()) {
+            circuit.getAppearance().recomputeDefaultAppearance();
+          }
+        }
+        proj.getFrame().repaint();
+      }
     } catch (IllegalAccessException
         | UnsupportedLookAndFeelException
         | InstantiationException
         | ClassNotFoundException ignored) {
     }
-    previewContainer.repaint();
-    previewContainer.revalidate();
+  }
+
+  private void updateEditorThemeSelection() {
+    final var preference =
+        AppPreferences.isDarkTheme(AppPreferences.LookAndFeel.get())
+            ? AppPreferences.DARK_EDITOR_THEME
+            : AppPreferences.LIGHT_EDITOR_THEME;
+    final var selectedTheme = preference.get();
+    for (var i = 0; i < AppPreferences.EDITOR_THEMES.length; i++) {
+      if (AppPreferences.EDITOR_THEMES[i].equals(selectedTheme)) {
+        editorTheme.setSelectedIndex(i);
+        return;
+      }
+    }
   }
 
   @Override
@@ -278,16 +310,18 @@ class WindowOptions extends OptionsPanel {
     toolbarPlacement.localeChanged();
     zoomLabel.setText(S.get("windowToolbarZoomfactor"));
     lookfeelLabel.setText(S.get("windowToolbarLookandfeel"));
+    editorThemeLabel.setText(S.get("windowEditorTheme"));
     appFontLabel.setText(S.get("windowAppFont"));
     restartWarning.setText(S.get("windowRestartWarning"));
-    importantA.setText(S.get("windowToolbarPleaserestart"));
-    importantB.setText(S.get("windowToolbarImportant"));
+    zoomFactorImportant.setText(S.get("windowToolbarImportant"));
     resetWindowLayoutButton.setText(S.get("windowToolbarReset"));
     canvasBgColorTitle.setText(S.get("windowCanvasBgColor"));
     gridBgColorTitle.setText(S.get("windowGridBgColor"));
     gridDotColorTitle.setText(S.get("windowGridDotColor"));
     gridZoomedDotColorTitle.setText(S.get("windowGridZoomedDotColor"));
     componentColorTitle.setText(S.get("windowComponentColor"));
+    componentIconColorTitle.setText(S.get("windowComponentIconColor"));
+    textToolColorTitle.setText(S.get("windowTextToolColor"));
     gridColorsResetButton.setText(S.get("windowGridColorsReset"));
     zoomAutoButton.setText(S.get("windowSetAutoScaleFactor"));
   }
@@ -315,9 +349,20 @@ class WindowOptions extends OptionsPanel {
         if (newIndex != index && newIndex >= 0 && newIndex < lookAndFeelInfos.length) {
           index = newIndex;
           AppPreferences.LookAndFeel.set(lookAndFeelInfos[index].getClassName());
-          initThemePreviewer();
+          AppPreferences.applyThemeColors();
+          applyLookAndFeelGlobally(lookAndFeelInfos[index].getClassName());
+          updateEditorThemeSelection();
         }
         checkRestartWarning();
+      } else if (e.getSource().equals(editorTheme)) {
+        final var selectedIndex = editorTheme.getSelectedIndex();
+        if (selectedIndex >= 0 && selectedIndex < AppPreferences.EDITOR_THEMES.length) {
+          final var preference =
+              AppPreferences.isDarkTheme(AppPreferences.LookAndFeel.get())
+                  ? AppPreferences.DARK_EDITOR_THEME
+                  : AppPreferences.LIGHT_EDITOR_THEME;
+          preference.set(AppPreferences.EDITOR_THEMES[selectedIndex]);
+        }
       } else if (e.getSource().equals(appFont)) {
         String val = (String) appFont.getSelectedItem();
         AppPreferences.APP_FONT.set(S.get("windowAppFontDefault").equals(val) ? "" : val);
@@ -346,8 +391,7 @@ class WindowOptions extends OptionsPanel {
     }
 
     private void checkRestartWarning() {
-      boolean show = !Objects.equals(AppPreferences.APP_FONT.get(), initialAppFont)
-          || !Objects.equals(AppPreferences.LookAndFeel.get(), initialLookAndFeel);
+      boolean show = !Objects.equals(AppPreferences.APP_FONT.get(), initialAppFont);
       restartWarning.setVisible(show);
       restartWarningSpacer.setVisible(show);
     }

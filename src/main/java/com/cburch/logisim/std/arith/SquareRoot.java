@@ -83,7 +83,7 @@ public class SquareRoot extends InstanceFactory {
         new Object[] {BitWidth.create(8)});
     setKeyConfigurator(new BitWidthConfigurator(StdAttr.WIDTH));
     setOffsetBounds(Bounds.create(-40, -20, 40, 40));
-    setIcon(new ArithmeticIcon("\u221A"));
+    setIcon(new ArithmeticIcon("√"));
 
     Port[] ps = new Port[4];
     ps[IN] = new Port(-40, 0, Port.INPUT, StdAttr.WIDTH);
@@ -123,9 +123,9 @@ public class SquareRoot extends InstanceFactory {
     int y = loc.getY();
     GraphicsUtil.switchToWidth(g, 2);
     g.setColor(new Color(AppPreferences.COMPONENT_COLOR.get()));
-    g.drawLine(x - 15, y, x - 12, y + 5);
-    g.drawLine(x - 12, y + 5, x - 9, y - 5);
-    g.drawLine(x - 9, y - 5, x - 5, y - 5);
+    int[] xPoints = {x - 15, x - 12, x - 9, x - 5};
+    int[] yPoints = {y, y + 5, y - 5, y - 5};
+    g.drawPolyline(xPoints, yPoints, xPoints.length);
     GraphicsUtil.switchToWidth(g, 1);
   }
 

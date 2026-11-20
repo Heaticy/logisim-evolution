@@ -10,11 +10,13 @@
 package com.cburch.logisim.gui.generic;
 
 import com.cburch.draw.shapes.DrawAttr;
+import com.cburch.logisim.util.ImageUtil;
 import com.cburch.logisim.util.XmlUtil;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -24,13 +26,18 @@ import java.awt.font.TextAttribute;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.AttributedCharacterIterator;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
+import javax.imageio.ImageIO;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
@@ -43,7 +50,10 @@ import org.w3c.dom.Element;
 public class TikZInfo implements Cloneable {
 
   private static final double BASIC_STROKE_WIDTH = 1;
+  private static final String PNG_DATA_URI_PREFIX = "data:image/png;base64,";
+  private static final String XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
 
+  private boolean svgMode = false;
   private AffineTransform myTransformer = new AffineTransform();
   private Color drawColor;
   private Color backColor;
@@ -91,9 +101,18 @@ public class TikZInfo implements Cloneable {
     return " (" + getBarePoint(p) + ") ";
   }
 
+  public boolean isSvgMode() {
+    return svgMode;
+  }
+
+  public void setSvgMode(boolean mode) {
+    this.svgMode = mode;
+  }
+
   @Override
   public TikZInfo clone() {
     var newInst = new TikZInfo();
+    newInst.svgMode = svgMode;
     newInst.myTransformer = (AffineTransform) myTransformer.clone();
     newInst.drawColor = drawColor;
     newInst.backColor = backColor;
@@ -233,6 +252,10 @@ public class TikZInfo implements Cloneable {
     contents.add(new TikZString(str, x, y));
   }
 
+  public void addImage(BufferedImage image, AffineTransform transform) {
+    contents.add(new TikZImage(image, transform));
+  }
+
   public void rotate(double theta) {
     getAffineTransform().rotate(theta);
     myRotation += theta;
@@ -291,27 +314,41 @@ public class TikZInfo implements Cloneable {
   }
 
   private void optimize() {
-    final var l = contents.listIterator();
-    while (l.hasNext()) {
-      final var obj = l.next();
+    // A numeric index iteration was chosen purposely here.
+    // I'm avoiding the for-each construct to prevent Java from
+    // generating an internal Iterator object, which could
+    // malfunction when we remove later items from the list.
+    int index = 0;
+    while (index < contents.size()) {
+      final var obj = contents.get(index);
       if (obj instanceof TikZLine lineA) {
-        var merged = false;
-        for (var i = contents.indexOf(obj) + 1; i < contents.size(); i++) {
-          final var n = contents.get(i);
-          if (n instanceof TikZLine lineB) {
-            if (lineB.canMerge(lineA)) {
-              merged = lineB.merge(lineA);
-              if (merged) break;
+        // We must loop this part of the process now, because
+        // it could be possible to merge multiple times.
+        while (true) {
+          boolean merged = false;
+          int i = index + 1;
+          for (; i < contents.size(); i++) {
+            final var n = contents.get(i);
+            if (n instanceof TikZLine lineB) {
+              if (lineA.canMerge(lineB)) {
+                merged = lineA.merge(lineB);
+                if (merged) break;
+              }
             }
           }
+          if (merged) {
+            contents.remove(i);
+          } else {
+            break;
+          }
         }
-        if (merged) l.remove();
+        index++;
       } else if (obj.getClass() == TikZEllipse.class) {
         //This non-instanceof check must be used so that we DON'T match with classes that extend TikZEllipse.
         final var ovalA = (TikZEllipse) obj;
         final var circular = ovalA.radX == ovalA.radY;
         var redundant = false;
-        for (var i = contents.indexOf(obj) + 1; i < contents.size(); i++) {
+        for (int i = index + 1; i < contents.size(); i++) {
           final var n = contents.get(i);
           if (n.getClass() == TikZEllipse.class) {
             final var ovalB = (TikZEllipse) n;
@@ -329,7 +366,13 @@ public class TikZInfo implements Cloneable {
             }
           }
         }
-        if (redundant) l.remove();
+        if (redundant) {
+          contents.remove(index);
+        } else {
+          index++;
+        }
+      } else {
+        index++;
       }
     }
     for (DrawObject obj : contents) {
@@ -340,38 +383,30 @@ public class TikZInfo implements Cloneable {
   }
 
   private String getCharRepresentation(int i) {
-    final var repeat = i / 26;
-    final var charId = i % 26;
-    return String.valueOf((char) (charId + 'A')).repeat(repeat + 1);
+    int num = i + 1;
+    StringBuilder sb = new StringBuilder();
+    while (num > 0) {
+      num--;
+      final int c = (num % 26) + 'A';
+      sb.append((char) c);
+      num /= 26;
+    }
+    return sb.reverse().toString();
   }
 
   private String getFontDefinition(int i) {
-    final var content = new StringBuilder();
-    var replaced = false;
-    content
-        .append("\\def\\logisimfont")
-        .append(getCharRepresentation(i))
-        .append("#1{\\fontfamily{");
-    var fontName = usedFonts.get(i);
-    if (fontName.contains("SansSerif")) {
-      replaced = true;
-      fontName = "cmr";
-    } else if (fontName.contains("Monospaced")) {
-      replaced = true;
-      fontName = "cmtt";
-    } else if (fontName.contains("Courier")) {
-      replaced = true;
-      fontName = "pcr";
-    }
-    content.append(fontName);
-    content.append("}{#1}}");
-    if (replaced)
-      content
-          .append(" % Replaced by logisim, original font was \"")
-          .append(usedFonts.get(i))
-          .append("\"");
-    content.append("\n");
-    return content.toString();
+    final StringBuilder sb = new StringBuilder();
+    sb.append("\\def\\logisimfont").append(getCharRepresentation(i)).append("#1{");
+    final String familyName = usedFonts.get(i);
+    final String fontCommand = switch (familyName) {
+      case Font.MONOSPACED -> "\\texttt{#1}";
+      case Font.SANS_SERIF -> "\\textsf{#1}";
+      case Font.SERIF -> "\\textrm{#1}";
+      default -> "\\fontfamily{" + familyName + "}{#1}";
+    };
+    sb.append(fontCommand);
+    sb.append("}\n");
+    return sb.toString();
   }
 
   private String getColorDefinitions() {
@@ -407,6 +442,7 @@ public class TikZInfo implements Cloneable {
     final var svgInfo = parser.newDocument();
     final var svg = svgInfo.createElement("svg");
     svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.setAttribute("xmlns:xlink", XLINK_NAMESPACE);
     svg.setAttribute("version", "1.1");
     svg.setAttribute("viewBox", "0 0 " + width + " " + height);
     // Specifying only a viewBox is not sufficient.
@@ -538,11 +574,11 @@ public class TikZInfo implements Cloneable {
     }
 
     public Point getStartPoint() {
-      return points.isEmpty() ? start : points.get(0);
+      return points.isEmpty() ? start : points.getFirst();
     }
 
     public Point getEndPoint() {
-      return points.isEmpty() ? end : points.get(points.size() - 1);
+      return points.isEmpty() ? end : points.getLast();
     }
 
     public boolean canMerge(TikZLine l) {
@@ -596,9 +632,11 @@ public class TikZInfo implements Cloneable {
         final var prev = points.get(cursor - 1);
         final var cur = points.get(cursor);
         final var next = points.get(cursor + 1);
-        final boolean horiz_match = (prev.x == cur.x) && (cur.x == next.x);
-        final boolean vert_match = (prev.y == cur.y) && (cur.y == next.y);
-        if (horiz_match || vert_match) {
+        final boolean horiz_sequence = ((prev.x <= cur.x) && (cur.x <= next.x)) || ((prev.x >= cur.x) && (cur.x >= next.x));
+        final boolean vert_sequence = ((prev.y <= cur.y) && (cur.y <= next.y)) || ((prev.y >= cur.y) && (cur.y >= next.y));
+        final boolean horizontally_aligned = horiz_sequence && (prev.y == cur.y) && (cur.y == next.y);
+        final boolean vertically_aligned = vert_sequence && (prev.x == cur.x) && (cur.x == next.x);
+        if (horizontally_aligned || vertically_aligned) {
           points.remove(cursor);
         } else {
           cursor++;
@@ -630,8 +668,11 @@ public class TikZInfo implements Cloneable {
       contents.append(rounded(width)).append("pt, ").append(color).append("]");
       if (points.isEmpty()) {
         contents.append(intPointTikZ(start)).append("--").append(intPointTikZ(end));
+        if (close) return contents.append("-- cycle;").toString();
+        return contents.toString().stripTrailing() + ';';
       } else {
-        contents.append(intPointTikZ(points.get(0)));
+        if (close) points.add(points.getFirst());
+        contents.append(intPointTikZ(points.getFirst()));
         int cursor = 1;
         while (cursor < (points.size() - 1)) {
           final var prev = points.get(cursor - 1);
@@ -653,14 +694,13 @@ public class TikZInfo implements Cloneable {
           contents.append("--").append(intPointTikZ(cur));
           cursor++;
         }
+        if (close) {
+          points.removeLast();
+          final String almost = contents.toString();
+          return almost.substring(0, almost.lastIndexOf('(')) + "cycle;";
+        }
+        return contents.toString().stripTrailing() + ';';
       }
-      if (close) {
-        contents.append("-- cycle;");
-      } else {
-        //This is necessary to eliminate space between last point and final semicolon.
-        contents.setCharAt(contents.length() - 1, ';');
-      }
-      return contents.toString();
     }
 
     @Override
@@ -683,7 +723,7 @@ public class TikZInfo implements Cloneable {
           content.append(" L").append(intPointSVG(end));
         }
       } else {
-        content.append("M").append(intPointSVG(points.get(0)));
+        content.append("M").append(intPointSVG(points.getFirst()));
         for (int i = 1; i < points.size(); i++) {
           final Point prev = points.get(i - 1);
           final Point cur = points.get(i);
@@ -895,7 +935,7 @@ public class TikZInfo implements Cloneable {
     @Override
     public DrawObject clone() {
       final var newInst = new TikZBezier(shape, filled);
-      newInst.transform = transform;
+      newInst.transform = new AffineTransform(transform);
       newInst.color = color;
       newInst.alpha = alpha;
       newInst.strokeWidth = strokeWidth;
@@ -1209,6 +1249,111 @@ public class TikZInfo implements Cloneable {
     }
   }
 
+  private class TikZImage implements DrawObject {
+    private final String dataUri;
+    private final int width;
+    private final int height;
+    private AffineTransform transform;
+
+    public TikZImage(BufferedImage image, AffineTransform transform) {
+      dataUri = encodePng(image);
+      width = image.getWidth();
+      height = image.getHeight();
+      this.transform = new AffineTransform(transform);
+    }
+
+    private TikZImage(String dataUri, int width, int height, AffineTransform transform) {
+      this.dataUri = dataUri;
+      this.width = width;
+      this.height = height;
+      this.transform = transform;
+    }
+
+    private String encodePng(BufferedImage image) {
+      try {
+        final var output = new ByteArrayOutputStream();
+        if (!ImageIO.write(image, "png", output)) {
+          throw new IllegalStateException("No PNG image writer is available");
+        }
+        return PNG_DATA_URI_PREFIX + Base64.getEncoder().encodeToString(output.toByteArray());
+      } catch (IOException exception) {
+        throw new IllegalStateException("Unable to encode an image for SVG export", exception);
+      }
+    }
+
+    @Override
+    public String getTikZCommand() {
+      final var pt = new Point2D.Double(0, 0);
+      transform.transform(pt, pt);
+      final var sb = new StringBuilder();
+      sb.append("% Raster image omitted: TikZ image export is not supported.\n");
+      sb.append("\\draw [line width=").append(rounded(getStrokeWidth() * BASIC_STROKE_WIDTH))
+        .append("pt, ").append(getDrawColorString()).append("]");
+      sb.append(getPoint(pt)).append("rectangle");
+      sb.append(getPoint(new Point2D.Double(pt.x + width, pt.y + height)));
+      sb.append(";");
+      sb.append("\\node[anchor=north west, font=\\small] at (").append(rounded(pt.x))
+        .append(",").append(rounded(pt.y)).append(") {[Image: ").append(width).append("x")
+        .append(height).append("]};");
+      return sb.toString();
+    }
+
+    @Override
+    public void getSvgCommand(Document root, Element e) {
+      final var image = root.createElement("image");
+      image.setAttribute("x", "0");
+      image.setAttribute("y", "0");
+      image.setAttribute("width", Integer.toString(width));
+      image.setAttribute("height", Integer.toString(height));
+      image.setAttribute("preserveAspectRatio", "none");
+      final var matrix = new double[6];
+      transform.getMatrix(matrix);
+      image.setAttribute(
+          "transform",
+          "matrix("
+              + rounded(matrix[0])
+              + " "
+              + rounded(matrix[1])
+              + " "
+              + rounded(matrix[2])
+              + " "
+              + rounded(matrix[3])
+              + " "
+              + rounded(matrix[4])
+              + " "
+              + rounded(matrix[5])
+              + ")");
+      image.setAttributeNS(XLINK_NAMESPACE, "xlink:href", dataUri);
+      e.appendChild(image);
+    }
+
+    @Override
+    public boolean insideArea(int x, int y, int areaWidth, int areaHeight) {
+      final var imageBounds =
+          transform
+              .createTransformedShape(new Rectangle2D.Double(0, 0, width, height))
+              .getBounds2D();
+      final var areaBounds =
+          getAffineTransform()
+              .createTransformedShape(new Rectangle2D.Double(x, y, areaWidth, areaHeight))
+              .getBounds2D();
+      return areaBounds.contains(imageBounds);
+    }
+
+    @Override
+    public DrawObject clone() {
+      return new TikZImage(dataUri, width, height, new AffineTransform(transform));
+    }
+
+    @Override
+    public void move(int dx, int dy) {
+      final var delta = new Point2D.Double();
+      getAffineTransform().deltaTransform(new Point2D.Double(dx, dy), delta);
+      transform.preConcatenate(
+          AffineTransform.getTranslateInstance(delta.getX(), delta.getY()));
+    }
+  }
+
   private class TikZString implements DrawObject {
     private Point location;
     private String name;
@@ -1295,7 +1440,7 @@ public class TikZInfo implements Cloneable {
           } else content.append("}}\\text{");
         } else {
           char kar = strIter.current();
-          if (kar == '\u22C5' && !svg) {
+          if (kar == '⋅' && !svg) {
             content.append("}\\cdot\\text{");
           } else if (kar == '_' && !svg) {
             content.append("\\_");
@@ -1326,7 +1471,7 @@ public class TikZInfo implements Cloneable {
       content.append("\\selectfont\\node[inner sep=0, outer sep=0, ").append(color)
           .append(", anchor=base west");
       if (rotation != 0) content.append(", rotate=").append(rounded(rotation));
-      content.append("] at ").append(getPoint(location)).append(" {");
+      content.append("] at").append(getPoint(location)).append("{");
       if (name != null)
         if (name.isEmpty()) return "";
         else
@@ -1395,3 +1540,4 @@ public class TikZInfo implements Cloneable {
     }
   }
 }
+

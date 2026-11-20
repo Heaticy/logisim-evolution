@@ -78,8 +78,6 @@ texts you see on the screeen can be translated. Many of them were automatically 
 If you should find bizarre translations, please do not hesitate to [correct them](developers.md)
 in the corresponding property files and to make a pull request!
 
-This fork intentionally excludes the Simplified Chinese locale and Chinese help resources from packaged builds.
-
 ---
 
 # Alternatives #

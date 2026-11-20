@@ -46,7 +46,7 @@ public class FpSquareRoot extends InstanceFactory {
     setAttributes(new Attribute[] {StdAttr.FP_WIDTH}, new Object[] {BitWidth.create(32)});
     setKeyConfigurator(new BitWidthConfigurator(StdAttr.FP_WIDTH));
     setOffsetBounds(Bounds.create(-40, -20, 40, 40));
-    setIcon(new ArithmeticIcon("\u221A"));
+    setIcon(new ArithmeticIcon("√"));
 
     final var ps = new Port[3];
     ps[IN0] = new Port(-40, 0, Port.INPUT, StdAttr.FP_WIDTH);
@@ -73,9 +73,9 @@ public class FpSquareRoot extends InstanceFactory {
     final var y = loc.getY();
     GraphicsUtil.switchToWidth(g, 2);
     g.setColor(new Color(AppPreferences.COMPONENT_COLOR.get()));
-    g.drawLine(x - 15, y, x - 12, y + 5);
-    g.drawLine(x - 12, y + 5, x - 9, y - 5);
-    g.drawLine(x - 9, y - 5, x - 5, y - 5);
+    int[] xPoints = {x - 15, x - 12, x - 9, x - 5};
+    int[] yPoints = {y, y + 5, y - 5, y - 5};
+    g.drawPolyline(xPoints, yPoints, xPoints.length);
 
     g.drawLine(x - 35, y - 15, x - 35, y + 5);
     g.drawLine(x - 35, y - 15, x - 25, y - 15);

@@ -21,6 +21,7 @@
     * [Updating existing translation](localization.md#updating-existing-translation)
     * [Adding new translation](localization.md#adding-new-translation)
     * [Using trans-tool](localization.md#using-trans-tool)
+  * [Implementing TTL components](implementing_ttl_components.md)
   * [How to contribute](#how-to-contribute)
 
 ---
@@ -109,9 +110,6 @@ Packages can be built by running the `createAll` task:
 > by Java's `jpackage` utility. You may also need to install additional developer tools for the platform in order to build the
 > installer. See Java's [jpackage documentation](https://docs.oracle.com/en/java/javase/21/jpackage/packaging-overview.html)
 > for more details of tool requirements.
-
-On macOS, `createAll` now builds both `.dmg` and `.pkg` packages. The `.pkg` installer also installs a
-`/usr/local/bin/logisim-evolution` wrapper for terminal launch support.
 
 To see all available tasks run: `./gradlew tasks --all`
 

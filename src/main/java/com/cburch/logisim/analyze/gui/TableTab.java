@@ -60,7 +60,6 @@ import javax.swing.JSeparator;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 
 class TableTab extends AnalyzerTab implements Entry.EntryChangedListener {
   private class MyListener implements TruthTableListener, LocaleListener {
@@ -245,9 +244,9 @@ class TableTab extends AnalyzerTab implements Entry.EntryChangedListener {
           if (entry.isError()) {
             g.setColor(Value.errorColor);
             g.fillRect(x, y, cellWidth, cellHeight);
-            g.setColor(Color.BLACK);
+            g.setColor(getForeground());
           }
-          g.setColor(entry == Entry.BUS_ERROR ? Value.errorColor : Color.BLACK);
+          g.setColor(entry == Entry.BUS_ERROR ? Value.errorColor : getForeground());
           final var label = entry.getDescription();
           final var width = fm.stringWidth(label);
           g.drawString(label, x + (cellWidth - width) / 2, cy);
@@ -812,7 +811,7 @@ class TableTab extends AnalyzerTab implements Entry.EntryChangedListener {
       g.drawLine(left, lineY, left + tableWidth, lineY);
       g.drawLine(lineX, top, lineX, cellHeight);
 
-      g.setColor(Color.BLACK);
+      g.setColor(getForeground());
       g.setFont(headFont);
       inDim.paintHeaders(g, left, top);
       outDim.paintHeaders(g, left + inDim.width + headerHorizSep, top);
@@ -911,7 +910,6 @@ class TableTab extends AnalyzerTab implements Entry.EntryChangedListener {
           final var numPages = (n + rowsPerPage - 1) / rowsPerPage;
           if (pageNum >= numPages) return Printable.NO_SUCH_PAGE;
 
-          // g.drawRect(0, 0, (int)w-1, (int)h-1); // bage border
           GraphicsUtil.drawText(
               g,
               String.format("Combinational Analysis (page %d of %d)", pageNum + 1, numPages),

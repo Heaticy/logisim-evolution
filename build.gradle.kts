@@ -18,32 +18,40 @@ import org.gradle.jvm.application.tasks.CreateStartScripts
 
 plugins {
   checkstyle
-  id("com.github.ben-manes.versions") version "0.53.0"
+  id("io.github.ben-manes.versions") version "0.61.0"
   java
   application
-  id("com.gradleup.shadow") version "9.3.1"
-  id("org.sonarqube") version "7.2.2.6593"
+  id("com.gradleup.shadow") version "9.6.1"
+  id("org.sonarqube") version "7.5.0.8588"
 }
 
 repositories {
   mavenCentral()
 }
 
+sonar {
+  properties {
+    property("sonar.projectKey", "logisim-evolution_logisim-evolution")
+    property("sonar.organization", "logisim-evolution")
+  }
+}
+
 application {
   mainClass.set("com.cburch.logisim.Main")
+  applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 dependencies {
   implementation("org.hamcrest:hamcrest:3.0")
   implementation("javax.help:javahelp:2.0.05")
-  implementation("com.fifesoft:rsyntaxtextarea:3.6.1")
+  implementation("com.fifesoft:rsyntaxtextarea:4.0.1")
   implementation("net.sf.nimrod:nimrod-laf:1.2")
   implementation("org.drjekyll:colorpicker:2.0.1")
   implementation("at.swimmesberger:swingx-core:1.6.8")
   implementation("org.scijava:swing-checkbox-tree:1.0.2")
-  implementation("org.slf4j:slf4j-api:2.0.17")
-  implementation("org.slf4j:slf4j-simple:2.0.17")
-  implementation("com.formdev:flatlaf:3.7")
+  implementation("org.slf4j:slf4j-api:2.0.19")
+  implementation("org.slf4j:slf4j-simple:2.0.19")
+  implementation("com.formdev:flatlaf:3.7.2")
   implementation("commons-cli:commons-cli:1.11.0")
   implementation("com.vladsch.flexmark:flexmark-all:0.64.8")
   implementation("org.apache.commons:commons-text:1.15.0")
@@ -52,9 +60,9 @@ dependencies {
   // See: https://github.com/logisim-evolution/logisim-evolution/issues/709
   // implementation("org.apache.xmlgraphics:batik-swing:1.14")
 
-  testImplementation(platform("org.junit:junit-bom:6.0.2"))
-  testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
-  testImplementation("org.mockito:mockito-junit-jupiter:5.21.0")
+  testImplementation(platform("org.junit:junit-bom:6.1.3"))
+  testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
+  testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -80,31 +88,6 @@ val TARGET_DIR = "targetDir"
 val TARGET_FILE_PATH_BASE = "targetFilePathBase"
 val TARGET_FILE_PATH_BASE_SHORT = "targetFilePathBaseShort"
 val UPPERCASE_PROJECT_NAME = "uppercaseProjectName"
-
-fun parseLocaleProperty(raw: String?): Set<String> {
-  if (raw.isNullOrBlank()) return emptySet()
-  return raw
-      .split(",", ";", " ", "\n", "\t")
-      .map { it.trim() }
-      .filter { it.isNotEmpty() }
-      .toSet()
-}
-
-fun filterLocalesLine(line: String, excludedLocales: Set<String>): String {
-  if (excludedLocales.isEmpty()) return line
-  val trimmed = line.trimStart()
-  if (!trimmed.startsWith("locales")) return line
-
-  val keyValue = line.split("=", limit = 2)
-  if (keyValue.size != 2) return line
-
-  val locales = keyValue[1]
-      .trim()
-      .split(Regex("\\s+"))
-      .filter { it.isNotBlank() && !excludedLocales.contains(it) }
-
-  return "${keyValue[0].trim()} = ${locales.joinToString(" ")}"
-}
 
 java {
   sourceCompatibility = JavaVersion.VERSION_21
@@ -197,6 +180,7 @@ extra.apply {
       "--input", packageInputDir,
       "--main-class", "com.cburch.logisim.Main",
       "--main-jar", shadowJarFilename,
+      "--java-options", "--enable-native-access=ALL-UNNAMED",
       "--copyright", copyrights,
       "--description", "Digital logic design tool and simulator",
       "--vendor", "${project.name} developers",
@@ -223,12 +207,81 @@ extra.apply {
   set(APP_DIR_NAME, "${buildDir}/macOS-${osArch}/${uppercaseProjectName}.app")
 }
 
+val generatedDocumentationResources =
+    layout.buildDirectory.dir("generated/documentation-resources")
+
 java {
   sourceSets["main"].java {
     val buildDir = getLayout().getBuildDirectory().get().asFile
     srcDir("${buildDir}/generated/logisim/java")
     srcDir("${buildDir}/generated/sources/srcgen")
   }
+  sourceSets["main"].resources.srcDir(generatedDocumentationResources)
+}
+
+val docgen = sourceSets.create("docgen") {
+  java.srcDir("src/docgen/java")
+}
+
+dependencies {
+  testImplementation(docgen.output)
+}
+
+tasks.register<JavaExec>("generateDocumentationPrototype") {
+  group = "documentation"
+  description = "Generates the prototype English and German JavaHelp memory trees."
+  dependsOn(docgen.classesTaskName)
+
+  val manifest = layout.projectDirectory.file("src/main/doc/guide-memory.xml")
+  val germanOverlay = layout.projectDirectory.file("src/main/doc/locales/de-guide-memory.xml")
+  val docRoot = layout.projectDirectory.dir("src/main/resources/doc")
+  val outputRoot = layout.buildDirectory.dir("generated/documentation-prototype")
+
+  classpath = docgen.runtimeClasspath
+  mainClass.set("com.cburch.logisim.docs.DocumentationGenerator")
+  args(
+      manifest.asFile.absolutePath,
+      docRoot.asFile.absolutePath,
+      outputRoot.get().asFile.absolutePath,
+      germanOverlay.asFile.absolutePath,
+  )
+
+  inputs.files(manifest, germanOverlay)
+  inputs.dir(docRoot)
+  outputs.dir(outputRoot)
+}
+
+val generateHelpSets = tasks.register<JavaExec>("generateHelpSets") {
+  group = "documentation"
+  description = "Generates the JavaHelp HelpSet descriptors packaged by the application."
+  dependsOn(docgen.classesTaskName)
+
+  val metadata = layout.projectDirectory.file("src/main/doc/help-sets.xml")
+  val docRoot = layout.projectDirectory.dir("src/main/resources/doc")
+  val outputRoot = generatedDocumentationResources.map { it.dir("doc") }
+
+  classpath = docgen.runtimeClasspath
+  mainClass.set("com.cburch.logisim.docs.DocumentationGenerator")
+  args(
+      "--help-sets",
+      metadata.asFile.absolutePath,
+      docRoot.asFile.absolutePath,
+      outputRoot.get().asFile.absolutePath,
+  )
+
+  inputs.file(metadata)
+  inputs.dir(docRoot)
+  outputs.dir(outputRoot)
+  doFirst {
+    val directory = outputRoot.get().asFile
+    if (directory.exists() && !directory.deleteRecursively()) {
+      error("Could not clear generated HelpSet output directory: ${directory}")
+    }
+  }
+}
+
+tasks.named("processResources") {
+  dependsOn(generateHelpSets)
 }
 
 tasks.register<Jar>("sourcesJar") {
@@ -347,6 +400,73 @@ object func {
     return listOf("--add-modules", dependencies)
     // return (ext.get(parametersName) as List<Any?>).filterIsInstance<String>() + addModules
   }
+
+  /** Matches a bare package name that carries the Debian 64-bit `time_t` suffix. */
+  private val T64_PACKAGE_NAME = Regex("""[a-z0-9][a-z0-9+.-]*t64""")
+
+  /**
+   * Rewrites the `Depends` field of the given DEB package so that every `t64` package name is
+   * offered together with its pre-transition name, i.e. `libasound2t64 | libasound2`.
+   *
+   * Debian's 64-bit `time_t` transition renamed a lot of library packages by appending a `t64`
+   * suffix. `jpackage` reads the dependency names off the build machine, so a package built on a
+   * recent Ubuntu lists the new names only and refuses to install on Debian 12 or Ubuntu 22.04.
+   * On the architectures we ship (amd64, arm64) `time_t` was 64 bits all along, so both packages
+   * expose the very same ABI and either one satisfies us. `apt` honours the order of the
+   * alternatives, therefore recent systems keep using the `t64` package.
+   *
+   * See https://github.com/logisim-evolution/logisim-evolution/issues/2959
+   */
+  fun addLegacyDebDependencyAliases(debFile: String, workDir: String) {
+    val root = File(workDir)
+    root.deleteRecursively()
+    root.mkdirs()
+
+    // `--raw-extract` unpacks the payload and drops the control files into `DEBIAN/`,
+    // which is exactly the layout `--build` expects back.
+    runCommand(listOf("dpkg-deb", "--raw-extract", debFile, workDir),
+        "Error while unpacking the DEB package.")
+
+    val controlFile = File("${workDir}/DEBIAN/control")
+    val lines = controlFile.readLines()
+    val patched = mutableListOf<String>()
+    var aliased = false
+    var idx = 0
+    while (idx < lines.size) {
+      val line = lines[idx]
+      idx++
+      if (!line.startsWith("Depends:")) {
+        patched.add(line)
+        continue
+      }
+      // Control fields may be folded over continuation lines.
+      val value = StringBuilder(line.removePrefix("Depends:"))
+      while (idx < lines.size && (lines[idx].startsWith(" ") || lines[idx].startsWith("\t"))) {
+        value.append(" ").append(lines[idx].trim())
+        idx++
+      }
+      val deps = value.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+      patched.add("Depends: " + deps.joinToString(", ") { dep ->
+        if (!T64_PACKAGE_NAME.matches(dep)) dep else {
+          aliased = true
+          "${dep} | ${dep.dropLast(3)}"
+        }
+      })
+    }
+
+    if (!aliased) {
+      logger.lifecycle("No t64 dependencies found in ${debFile}. Package left untouched.")
+      root.deleteRecursively()
+      return
+    }
+
+    controlFile.writeText(patched.joinToString("\n") + "\n")
+    // `--root-owner-group` is a must, as the build user owns the unpacked files but the package
+    // has to hand them over to root, just like the one `jpackage` produced.
+    runCommand(listOf("dpkg-deb", "--root-owner-group", "--build", workDir, debFile),
+        "Error while repacking the DEB package.")
+    root.deleteRecursively()
+  }
 }
 
 /**
@@ -373,6 +493,9 @@ tasks.register("createNeededJavaModules") {
   description = "Creates a file containing the jdeps dependencies"
   dependsOn("shadowJar")
 
+  // AWT loads accessibility providers from user configuration at runtime, so jdeps cannot detect
+  // this optional module through static analysis.
+  val additionalJavaModules = listOf("jdk.accessibility")
   val libsDir = ext.get(LIBS_DIR) as String
   val shadowJarFilename = ext.get(SHADOW_JAR_FILE_NAME) as String
   val jarFileName = "${libsDir}/${shadowJarFilename}"
@@ -380,10 +503,18 @@ tasks.register("createNeededJavaModules") {
   val cmd = listOf(ext.get(JDEPS) as String, "--multi-release", "base","--print-module-deps", "--ignore-missing-deps", jarFileName)
 
   inputs.file(jarFileName)
+  inputs.property("additionalJavaModules", additionalJavaModules)
   outputs.file(outFileName)
 
   doLast {
-    val neededJavaModules = func.runCommand(cmd, "Error while finding Java dependencies with jdeps.").trim()
+    val neededJavaModules =
+        (func.runCommand(cmd, "Error while finding Java dependencies with jdeps.").split(',') +
+            additionalJavaModules)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+            .joinToString(",")
     File(outFileName).writeText(neededJavaModules)
     func.verifyFileExists(outFileName)
   }
@@ -438,6 +569,7 @@ tasks.register("createDeb") {
   val outputFile = "${targetDir}/${project.name}_${appVersion}_${debArch}.deb"
   val linuxParams = (ext.get(LINUX_PARAMS) as List<Any?>).filterIsInstance<String>()
   val jdepsFile = ext.get(JDEPS_FILE) as String
+  val repackDir = "${ext.get(BUILD_DIR) as String}/debRepack"
 
   inputs.dir(ext.get(PACKAGE_INPUT_DIR) as String)
   inputs.dir("${ext.get(SUPPORT_DIR) as String}/linux")
@@ -454,6 +586,7 @@ tasks.register("createDeb") {
     val params = linuxParams + func.getNeededModules(jdepsFile) + listOf("--type", "deb")
     func.runCommand(params, "Error while creating the DEB package.")
     func.verifyFileExists(outputFile);
+    func.addLegacyDebDependencyAliases(outputFile, repackDir)
   }
 }
 
@@ -932,8 +1065,6 @@ tasks.register("jpackage") {
 val compilerOptions = listOf("-Xlint:deprecation", "-Xlint:unchecked")
 
 tasks {
-  val excludedLocales = parseLocaleProperty(findProperty("excludeLocales") as String?)
-
   compileJava {
     options.encoding = "UTF-8"
     options.compilerArgs = compilerOptions
@@ -947,6 +1078,7 @@ tasks {
 
   test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 //    testLogging {
 //      events("passed", "skipped", "failed")
 //    }
@@ -968,6 +1100,7 @@ tasks {
   }
 
   shadowJar {
+    exclude("**/*_zh.properties", "**/*_zh_*.properties")
     archiveBaseName.set(project.name)
     archiveVersion.set(ext.get(APP_VERSION) as String)
     from(".") {
@@ -978,18 +1111,8 @@ tasks {
   }
 
   processResources {
-    inputs.property("excludeLocales", excludedLocales.joinToString(","))
-    if (excludedLocales.isNotEmpty()) {
-      excludedLocales.forEach { locale ->
-        exclude("**/*_${locale}.properties")
-        exclude("doc/${locale}/**")
-        exclude("doc/doc_${locale}.hs")
-        exclude("doc/map_${locale}.jhm")
-      }
-      filesMatching("resources/logisim/settings.properties") {
-        filter { line -> filterLocalesLine(line, excludedLocales) }
-      }
-    }
+    exclude("**/*_zh.properties", "**/*_zh_*.properties")
+    exclude("doc/zh/**", "doc/doc_zh.hs", "doc/map_zh.jhm", "doc/search_lookup_zh/**")
   }
 
   // Checkstyles related tasks: "checkstylMain" and "checkstyleTest"
@@ -1003,7 +1126,7 @@ tasks {
       it.name.startsWith("checkstyle")
     }
     config = resources.text.fromArchiveEntry(archive, "google_checks.xml")
-    
+
     configProperties["org.checkstyle.google.suppressionfilter.config"] =
         "$projectDir/checkstyle-suppressions.xml"
 

@@ -1,36 +1,18 @@
-# Fork Notes
+# SI100B course build
 
-This repository tracks a course-oriented `logisim-evolution` 4.1.0 build.
+Based on [Logisim-evolution v5.0.0](https://github.com/logisim-evolution/logisim-evolution/releases/tag/v5.0.0).
+The application starts in English on a fresh installation. Chinese is excluded
+from the language selector and the packaged resources. Existing preferences for
+other supported languages still work.
 
-Scope of this repository:
-- Preserve the upstream 4.1.0 application behavior used in teaching materials.
-- Package a classroom-ready distribution.
-- Preserve upstream license and attribution.
+This build includes the upstream HiDPI fixes for canvas and menu shortcut fonts
+from [PR #3122](https://github.com/logisim-evolution/logisim-evolution/pull/3122).
 
-Current implementation details:
-- `gradle.properties` sets `excludeLocales = zh`.
-- `processResources` in `build.gradle.kts` already supports locale exclusion, so packaged JARs omit:
-  - `resources/logisim/strings/*_zh.properties`
-  - `doc/zh/**`
-- `src/main/resources/resources/logisim/settings.properties` is aligned so the app no longer advertises `zh`.
+The macOS PKG installs the application into `/Applications` and supplies
+`/usr/local/bin/logisim-evolution`. On Windows the MSI adds the installation
+directory to the current user's PATH. In a new terminal, Windows users can run
+`logisim-evolution` or `logisim`. The Debian package installs
+`/usr/bin/logisim-evolution`. The DMG, portable ZIP and JAR are alternatives to
+the installers.
 
-Recommended GitHub publishing rules:
-- Keep `LICENSE.md`, `README.md`, and upstream copyright notices.
-- Publish both source and compiled artifacts together.
-- Distinguish course releases by repository owner, release notes, and tag metadata.
-
-Suggested release naming:
-- Tag: `v4.1.0-course1`
-- Release title: `Logisim-evolution 4.1.0`
-
-Build command:
-
-```bash
-./gradlew shadowJar
-```
-
-Expected output:
-
-```text
-build/libs/logisim-evolution-4.1.0-all.jar
-```
+The source and binaries are distributed under the upstream GPL-3.0 license.

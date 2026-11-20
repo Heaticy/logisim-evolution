@@ -4,12 +4,17 @@
 
 # Logisim-evolution #
 
-This repository contains a course-oriented `logisim-evolution` 4.1.0 build.
-It keeps the upstream GPL-3.0 license and attribution while packaging a classroom-ready distribution.
+**SI100B course edition · 5.0.0**
+
+[Download the course edition](https://github.com/Heaticy/logisim-evolution/releases/tag/v5.0.0).
+Use the MSI on Windows or PKG on macOS to get a terminal launcher after installation.
+The application starts in English on a fresh installation. See [course build notes](FORK_NOTES.md).
+
 
 * **Table of contents**
   * [Features](#features)
   * [Requirements](#requirements)
+  * [Troubleshooting](#troubleshooting)
   * **[Downloads](#download)**
     * [Package Manager](#package-manager)
     * [Nightly builds (unstable)](#nightly-builds)
@@ -40,9 +45,40 @@ Project highlights:
 * supports [multiple languages](docs/docs.md#translations),
 * and more!
 
+Getting started (no experience needed):
+
+Step-by-step first circuit:
+
+| Step | What you do | Why it matters |
+| --- | --- | --- |
+| 1 | `File → New` | Start a clean project |
+| 2 | Place two `Input` components and one `AND` gate | Create a simple logic function |
+| 3 | Add a `Probe` or `Lamp` as the output | Make the result visible |
+| 4 | Use the wiring tool to connect inputs → gate → output | Build the circuit path |
+| 5 | Toggle the inputs | Observe how logic affects the output |
+| 6 | Save the project | Keep your work for later |
+
+Key ideas in plain language:
+
+| Concept | What it means in practice |
+| --- | --- |
+| Component | A building block you place on the canvas |
+| Wire | The path that carries a 0 or 1 between components |
+| Signal | The 0/1 value traveling on a wire |
+| Subcircuit | A reusable group of components you define |
+| Library | A collection of components you can add to a project |
+
+If you get stuck:
+
+* Click a component and read its properties panel.
+* Use `Edit → Undo` to step back safely.
+* Check the screenshots and docs links below for examples.
+
 [![Logisim-evolution](docs/img/logisim-evolution-01-small.png)](docs/pics.md)
 [![Logisim-evolution](docs/img/logisim-evolution-02-small.png)](docs/pics.md)
 [![Logisim-evolution](docs/img/logisim-evolution-03-small.png)](docs/pics.md)
+
+Image gallery: the three thumbnails above link to a larger set of screenshots in `docs/pics.md`.
 
 ---
 
@@ -50,6 +86,39 @@ Project highlights:
 
 `Logisim-evolution` is a Java application; therefore, it can run on any operating system supporting the Java runtime enviroment.
 It requires [Java 21 (or newer)](https://adoptium.net/temurin/releases/).
+
+Accessibility notes:
+
+* If you use a screen reader, the `docs/` pages are plain Markdown and generally read well in linear order.
+* If you prefer larger text or higher contrast, use your OS display settings or Java accessibility options.
+* Keyboard navigation is supported throughout the app; consult the in-app help for shortcuts.
+* The image gallery uses thumbnails that link to full-size images for better visibility.
+
+Accessibility quick setup:
+
+| Need | Tip |
+| --- | --- |
+| Larger text | Increase OS scaling or Java UI scaling |
+| High contrast | Enable high-contrast mode in your OS |
+| Keyboard-only use | Rely on menus and in-app shortcuts |
+
+---
+
+## Troubleshooting ##
+
+### Blank window on Linux ###
+
+With some non-reparenting window managers, the Logisim-evolution window may appear blank even
+though its controls still respond. This is caused by an interaction between Java AWT and the window
+manager. Try launching the JAR once with the following environment variable:
+
+```bash
+env _JAVA_AWT_WM_NONREPARENTING=1 java -jar logisim-evolution-<version>-all.jar
+```
+
+If this resolves the problem, configure the same environment variable in the session or launcher
+used to start Logisim-evolution. See [issue #1235](https://github.com/logisim-evolution/logisim-evolution/issues/1235)
+for background and confirmed configurations.
 
 ---
 
@@ -69,8 +138,6 @@ include the Java runtime and do not require it to be installed separately:
   supported Linux distributions (also available in [Snapcraft store](https://snapcraft.io/logisim-evolution)),
 * `logisim-evolution-<version>-aarch64.msi`: Installer package for Microsoft Windows for Arm processors,
 * `logisim-evolution-<version>-amd64.msi`: Installer package for Microsoft Windows for Intel processors,
-* `logisim-evolution-<version>-aarch64.pkg`: macOS installer package for Apple processors,
-* `logisim-evolution-<version>-x86_64.pkg`: macOS installer package for Intel processors,
 * `logisim-evolution-<version>-aarch64.dmg`: macOS package for Apple processors,
 * `logisim-evolution-<version>-x86_64.dmg`: macOS package for Intel processors (also runs on Apple processors in simulation).
 
@@ -79,12 +146,23 @@ is also available and can be run on any system with a supported Java runtime ins
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/logisim-evolution)
 
+Which download should I pick?
+
+| You are on | Pick this | Notes |
+| --- | --- | --- |
+| Windows (Intel/AMD) | `logisim-evolution-<version>-amd64.msi` | Standard installer |
+| Windows (ARM) | `logisim-evolution-<version>-aarch64.msi` | For ARM devices |
+| macOS (Apple Silicon) | `logisim-evolution-<version>-aarch64.dmg` | For M-series Macs |
+| macOS (Intel) | `logisim-evolution-<version>-x86_64.dmg` | Also runs via Rosetta |
+| Linux (Debian/Ubuntu) | `logisim-evolution_<version>-1_amd64.deb` | Debian package |
+| Linux (Fedora/Redhat) | `logisim-evolution-<version>-1.x86_64.rpm` | RPM package |
+| Linux (Snap) | `logisim-evolution-<version>_amd64.snap` | Snap store build |
+| Any OS with Java | `logisim-evolution-<version>-all.jar` | Portable option |
+
 ---
 
 **Note for macOS users**:
 The Logisim-evolution.app is not signed with an Apple approved certificate.
-
-If you install using the `.pkg` package, a `logisim-evolution` command wrapper is also installed to `/usr/local/bin`.
 
 When launching the application for the first time, you will have to start it via the "Open" entry in the
 application icon's context menu in the macOS Finder. This is either done by clicking the application
@@ -111,14 +189,16 @@ before [creating an issue](https://github.com/logisim-evolution/logisim-evolutio
 the official [Logisim-evolution repository](https://github.com/logisim-evolution/logisim-evolution).
 Otherwise, report the issue to the package maintainer!
 
-* [Snap](https://snapcraft.io/logisim-evolution) (`snap install logisim-evolution`)
-* [Flathub](https://flathub.org/apps/details/com.github.reds.LogisimEvolution) (`flatpak install flathub com.github.reds.LogisimEvolution`)
-* [Homebrew](https://formulae.brew.sh/cask/logisim-evolution) (`brew install --cask logisim-evolution`)
-* [MacPorts](https://ports.macports.org/port/logisim-evolution/details/) (`port install logisim-evolution`)
-* [Chocolatey](https://community.chocolatey.org/packages/logisim-evolution) (`choco install logisim-evolution`)
-* [winget](https://winget.run/pkg/logisim-evolution/logisim-evolution) (`winget install -e --id logisim-evolution.logisim-evolution`)
-* [Arch User Repository](https://aur.archlinux.org/packages/logisim-evolution)
-* [nixpkgs](https://search.nixos.org/packages?channel=24.05&show=logisim-evolution)(`nix-shell -p logisim-evolution`)
+| Package manager | Command | Available version |
+| --------------- | ------- | ----------------- |
+| [Snap](https://snapcraft.io/logisim-evolution) | `snap install logisim-evolution` | ![Snapcraft Version](https://img.shields.io/snapcraft/v/logisim-evolution/latest/stable) |
+| [Flathub](https://flathub.org/apps/details/com.github.reds.LogisimEvolution) | `flatpak install flathub com.github.reds.LogisimEvolution` | ![Flathub Version](https://img.shields.io/flathub/v/com.github.reds.LogisimEvolution) |
+| [Homebrew](https://formulae.brew.sh/cask/logisim-evolution) | `brew install --cask logisim-evolution` | ![Homebrew Cask Version](https://img.shields.io/homebrew/cask/v/logisim-evolution) |
+| [MacPorts](https://ports.macports.org/port/logisim-evolution/details/) | `port install logisim-evolution` | ![MacPorts Port Version](https://img.shields.io/macports/v/logisim-evolution) |
+| [Chocolatey](https://community.chocolatey.org/packages/logisim-evolution) | `choco install logisim-evolution` | ![Chocolatey Version](https://img.shields.io/chocolatey/v/Logisim-evolution) |
+| [winget](https://winget.run/pkg/logisim-evolution/logisim-evolution) | `winget install -e --id logisim-evolution.logisim-evolution` | ![WinGet Package Version](https://img.shields.io/winget/v/logisim-evolution.logisim-evolution) |
+| [Arch User Repository](https://aur.archlinux.org/packages/logisim-evolution) | | ![AUR Version](https://img.shields.io/aur/version/logisim-evolution) |
+| [nixpkgs](https://search.nixos.org/packages?channel=26.05&show=logisim-evolution) | `nix-shell -p logisim-evolution` | [![nixpkgs stable 26.05 package](https://repology.org/badge/version-for-repo/nix_stable_26_05/logisim-evolution.svg)](https://repology.org/project/logisim-evolution/versions) |
 
 ### Nightly builds ###
 
@@ -146,5 +226,5 @@ if you found a bug or have suggestions for improvement.
 
 ## License ##
 
-* `Logisim-evolution` is copyrighted ©2001-2024 by Logisim-evolution [developers](docs/credits.md).
+* `Logisim-evolution` is copyrighted ©2001-2026 by Logisim-evolution [developers](docs/credits.md).
 * This is free software licensed under [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.en.html).
