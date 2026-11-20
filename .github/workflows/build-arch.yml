@@ -39,7 +39,9 @@ jobs:
           docker run --rm -v "$PWD/arch-build:/work:ro" archlinux:base             /bin/bash -euo pipefail -c '
               pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth xorg-xwininfo ttf-dejavu
               pacman -U --noconfirm /work/logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst
-              [[ "$(command -v logisim-evolution)" == /usr/bin/logisim-evolution ]]
+              launcher=$(command -v logisim-evolution)
+              printf "Resolved launcher: %s\n" "$launcher"
+              [[ "$(readlink -f "$launcher")" == /usr/bin/logisim-evolution ]]
               pacman -Q logisim-evolution-si100b jre21-openjdk
               if ! JAVA_TOOL_OPTIONS="-Djava.awt.headless=true" logisim-evolution --version > /tmp/logisim-version.txt 2>&1; then
                 cat /tmp/logisim-version.txt >&2
