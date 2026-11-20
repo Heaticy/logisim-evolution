@@ -1,0 +1,43 @@
+name: Replace the verified SI100B Windows release assets
+on:
+  push:
+    branches: [si100b-5.0-publish-windows]
+permissions:
+  actions: read
+  contents: write
+env:
+  BUILD_RUN: '44732849016'
+  BUILD_SHA: f7a9607574e9686746b21f4d7f8bae289f155b63
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify build provenance and success
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN" |
+            jq -e --arg sha "$BUILD_SHA" '.head_sha == $sha and .head_branch == "si100b-5.0-no-windows-alias" and .conclusion == "success"'
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-windows-msi
+          path: windows-output
+          github-token: ${{ github.token }}
+          run-id: ${{ env.BUILD_RUN }}
+      - name: Replace the Windows downloads and their checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/replace_si100b_windows_release_assets.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: si100b-windows-release-recovery-and-receipt
+          path: |
+            transaction/backup/
+            transaction/verified/
+          retention-days: 30
