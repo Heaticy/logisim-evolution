@@ -1,24 +1,31 @@
 pkgname=logisim-evolution-si100b
 pkgver=5.0.0
 pkgrel=1
-pkgdesc='SI100B course edition of Logisim-evolution with an embedded Java runtime'
+pkgdesc='SI100B course edition of Logisim-evolution'
 arch=('x86_64')
 url='https://github.com/Heaticy/logisim-evolution'
 license=('GPL-3.0-only')
-depends=('alsa-lib' 'fontconfig' 'freetype2' 'glibc' 'libgcc' 'libx11' 'libxext' 'libxi' 'libxrender' 'libxtst' 'zlib')
+depends=('jre21-openjdk')
 conflicts=('logisim-evolution' 'logisim-evolution-bin')
-options=('!strip' '!debug')
 
 package() {
-    install -d "$pkgdir/opt" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications"
-    cp -a "$startdir/deb-root/opt/logisim-evolution" "$pkgdir/opt/"
+    local app_dir=/usr/share/java/logisim-evolution-si100b
+    install -Dm644 "$startdir/logisim-evolution-${pkgver}-all.jar" "$pkgdir$app_dir/logisim-evolution.jar"
+    install -Dm644 "$startdir/logisim-icon-128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/logisim-evolution-si100b.png"
+    install -d "$pkgdir/usr/bin" "$pkgdir/usr/share/applications"
     cat > "$pkgdir/usr/bin/logisim-evolution" <<'LAUNCHER'
 #!/bin/sh
-exec /opt/logisim-evolution/bin/logisim-evolution "$@"
+exec /usr/lib/jvm/java-21-openjdk/bin/java -jar /usr/share/java/logisim-evolution-si100b/logisim-evolution.jar "$@"
 LAUNCHER
     chmod 755 "$pkgdir/usr/bin/logisim-evolution"
-    local desktop
-    desktop=$(find "$startdir/deb-root/opt/logisim-evolution" -type f -name '*.desktop' -print -quit)
-    test -f "$desktop"
-    install -Dm644 "$desktop" "$pkgdir/usr/share/applications/logisim-evolution-si100b.desktop"
+    cat > "$pkgdir/usr/share/applications/logisim-evolution-si100b.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Logisim-evolution (SI100B)
+Exec=logisim-evolution %F
+Icon=logisim-evolution-si100b
+Terminal=false
+Categories=Education;Electronics;
+DESKTOP
+    chmod 644 "$pkgdir/usr/share/applications/logisim-evolution-si100b.desktop"
 }

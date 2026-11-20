@@ -9,17 +9,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - name: Verify and extract the released Debian payload
+      - name: Verify the released course JAR
         shell: bash
         run: |
           set -euo pipefail
           install -d arch-build
-          cp support/arch/PKGBUILD arch-build/
-          deb=logisim-evolution_5.0.0_amd64.deb
-          curl -fLsS --retry 3 "https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/$deb" -o "$RUNNER_TEMP/$deb"
-          printf '%s  %s\n' fd63499476162760bf8eedd08acc76be58cb9d840eaf719cddad9ac611d3f962 "$RUNNER_TEMP/$deb" | sha256sum --check
-          dpkg-deb -x "$RUNNER_TEMP/$deb" arch-build/deb-root
-          test -x arch-build/deb-root/opt/logisim-evolution/bin/logisim-evolution
+          cp support/arch/PKGBUILD support/jpackage/linux/logisim-icon-128.png arch-build/
+          jar=logisim-evolution-5.0.0-all.jar
+          curl -fLsS --retry 3 "https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/$jar" -o "arch-build/$jar"
+          printf '%s  %s\n' 97a28fe107409934ef043e011311e1de0d692a7e55a315eb3e226c128acacc02 "arch-build/$jar" | sha256sum --check
       - name: Build with makepkg on Arch
         shell: bash
         run: |
@@ -42,11 +40,11 @@ jobs:
               pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth xorg-xwininfo ttf-dejavu
               pacman -U --noconfirm /work/logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst
               [[ "$(command -v logisim-evolution)" == /usr/bin/logisim-evolution ]]
-              if ! logisim-evolution --help > /tmp/logisim-help.txt 2>&1; then
+              if ! JAVA_TOOL_OPTIONS="-Djava.awt.headless=true" logisim-evolution --help > /tmp/logisim-help.txt 2>&1; then
                 cat /tmp/logisim-help.txt
                 exit 1
               fi
-              cat /tmp/logisim-help.txt
+              grep -i "usage:" /tmp/logisim-help.txt
               Xvfb :42 -screen 0 1920x1080x24 > /tmp/xvfb.log 2>&1 &
               display_pid=$!
               trap "kill $display_pid 2>/dev/null || true" EXIT
