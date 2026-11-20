@@ -1,0 +1,50 @@
+name: Verify the SI100B Windows native launcher
+on:
+  push:
+    branches: [si100b-hw0-windows-probe]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2022
+    steps:
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Join-Path $env:RUNNER_TEMP 'logisim-evolution-5.0.0-amd64.msi'
+          Invoke-WebRequest 'https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/logisim-evolution-5.0.0-amd64.msi' -OutFile $msi
+          if ((Get-FileHash $msi).Hash -ne '04d143630607632072a2d7e4a34a55f75f0b26a268261cb843477efb1561148d') { throw 'MSI hash mismatch' }
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"{0}"' -f $msi), '/qn', '/norestart') -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) { throw "MSI install failed: $($install.ExitCode)" }
+          $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+          $zip = Join-Path $env:RUNNER_TEMP 'hw0.zip'
+          $starter = Join-Path $env:RUNNER_TEMP 'SI100B HW0'
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/08faba94ea17a1a2e4a4d65255a3edc53beac7ea36907aa45771a35dcd45a504/HW0-ex1.zip' -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $starter
+          $circuit = Join-Path $starter 'ex1.circ'
+          function Capture([string] $Native, [string[]] $Values) {
+            $i = New-Object System.Diagnostics.ProcessStartInfo
+            $i.FileName = $Native
+            $i.Arguments = ($Values | ForEach-Object { '"' + $_ + '"' }) -join ' '
+            $i.UseShellExecute = $false
+            $i.RedirectStandardOutput = $true
+            $i.RedirectStandardError = $true
+            $i.CreateNoWindow = $true
+            $p = [System.Diagnostics.Process]::Start($i)
+            try {
+              $out = $p.StandardOutput.ReadToEndAsync()
+              $err = $p.StandardError.ReadToEndAsync()
+              if (!$p.WaitForExit(20000)) {$p.Kill();throw 'native launcher timed out'}
+              return @{ code=$p.ExitCode; out=$out.Result; err=$err.Result }
+            } finally {$p.Dispose()}
+          }
+          $worked=$false
+          foreach ($name in @('logisim-evolution','logisim')) {
+            $cmd = Get-Command $name -CommandType Application -ErrorAction Stop
+            $version = Capture $cmd.Source @('--version')
+            $table = Capture $cmd.Source @('--tty','table','--toplevel-circuit','NAND1',$circuit)
+            Write-Output "$name version exit $($version.code), table exit $($table.code)"
+            Write-Output $version.out $version.err $table.out $table.err
+            if ($version.out -match 'v?5\.0\.0' -and $table.out -match '(?m)^A\s+B\s+RESULT' -and $table.out -match '(?m)^0\s+0\s+U') { $worked=$true }
+          }
+          if (!$worked) { throw 'Neither native launcher emitted the expected truth table.' }
