@@ -24,11 +24,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD/arch-build:/work" archlinux:base-devel             /bin/bash -euo pipefail -c '
+          docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -v "$PWD/arch-build:/work" archlinux:base-devel             /bin/bash -euo pipefail -c '
               useradd --create-home builder
               chown -R builder:builder /work
               cd /work
               runuser -u builder -- makepkg --nodeps --noconfirm
+              chown "$HOST_UID:$HOST_GID" /work /work/*.pkg.tar.zst
             '
           cd arch-build
           sha256sum logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst > logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst.sha256
