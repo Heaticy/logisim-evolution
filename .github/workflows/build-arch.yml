@@ -40,11 +40,13 @@ jobs:
               pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth xorg-xwininfo ttf-dejavu
               pacman -U --noconfirm /work/logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst
               [[ "$(command -v logisim-evolution)" == /usr/bin/logisim-evolution ]]
-              if ! JAVA_TOOL_OPTIONS="-Djava.awt.headless=true" logisim-evolution --help > /tmp/logisim-help.txt 2>&1; then
-                cat /tmp/logisim-help.txt
+              pacman -Q logisim-evolution-si100b jre21-openjdk
+              if ! JAVA_TOOL_OPTIONS="-Djava.awt.headless=true" logisim-evolution --version > /tmp/logisim-version.txt 2>&1; then
+                cat /tmp/logisim-version.txt >&2
                 exit 1
               fi
-              grep -i "usage:" /tmp/logisim-help.txt
+              cat /tmp/logisim-version.txt
+              grep -F "5.0.0" /tmp/logisim-version.txt
               Xvfb :42 -screen 0 1920x1080x24 > /tmp/xvfb.log 2>&1 &
               display_pid=$!
               trap "kill $display_pid 2>/dev/null || true" EXIT
@@ -53,6 +55,10 @@ jobs:
                 if xwininfo -root >/dev/null 2>&1; then break; fi
                 sleep 1
               done
+              if ! xwininfo -root >/dev/null 2>&1; then
+                cat /tmp/xvfb.log >&2
+                exit 1
+              fi
               logisim-evolution > /tmp/logisim-gui.txt 2>&1 &
               app_pid=$!
               for i in {1..25}; do
