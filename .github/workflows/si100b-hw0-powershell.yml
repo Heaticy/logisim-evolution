@@ -19,8 +19,8 @@ jobs:
           $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')
           $zip = Join-Path $env:RUNNER_TEMP 'hw0.zip'
           $folder = Join-Path $env:RUNNER_TEMP 'SI100B HW0 From ZIP'
-          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/be77da974b002b00d4554beda51aa204d16064390c558ff7c9442e9d3d96ecd1/SI100B-HW0-Student.zip' -OutFile $zip
-          if ((Get-FileHash $zip).Hash -ne 'be77da974b002b00d4554beda51aa204d16064390c558ff7c9442e9d3d96ecd1') { throw 'Student ZIP hash mismatch.' }
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/639315d374a020e37c74cf9a550cb77980e5295e29d88675c07ac84e6d85c4fb/SI100B-HW0-Student.zip' -OutFile $zip
+          if ((Get-FileHash $zip).Hash -ne '639315d374a020e37c74cf9a550cb77980e5295e29d88675c07ac84e6d85c4fb') { throw 'Student ZIP hash mismatch.' }
           Expand-Archive -LiteralPath $zip -DestinationPath $folder
           $script = Join-Path $folder 'Self-Test.ps1'
           $start = New-Object System.Diagnostics.ProcessStartInfo
