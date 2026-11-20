@@ -1,0 +1,92 @@
+name: Build SI100B Arch Linux package
+on:
+  push:
+    branches: [si100b-5.0-arch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify and extract the released Debian payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d arch-build
+          cp support/arch/PKGBUILD arch-build/
+          deb=logisim-evolution_5.0.0_amd64.deb
+          curl -fLsS --retry 3 "https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/$deb" -o "$RUNNER_TEMP/$deb"
+          printf '%s  %s\n' fd63499476162760bf8eedd08acc76be58cb9d840eaf719cddad9ac611d3f962 "$RUNNER_TEMP/$deb" | sha256sum --check
+          dpkg-deb -x "$RUNNER_TEMP/$deb" arch-build/deb-root
+          test -x arch-build/deb-root/opt/logisim-evolution/bin/logisim-evolution
+      - name: Build with makepkg on Arch
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/arch-build:/work" archlinux:base-devel             /bin/bash -euo pipefail -c '
+              useradd --create-home builder
+              chown -R builder:builder /work
+              cd /work
+              runuser -u builder -- makepkg --nodeps --noconfirm
+            '
+          cd arch-build
+          sha256sum logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst > logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst.sha256
+      - name: Install and launch on a clean Arch system
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/arch-build:/work:ro" archlinux:base             /bin/bash -euo pipefail -c '
+              pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth xorg-xwininfo ttf-dejavu
+              pacman -U --noconfirm /work/logisim-evolution-si100b-5.0.0-1-x86_64.pkg.tar.zst
+              [[ "$(command -v logisim-evolution)" == /usr/bin/logisim-evolution ]]
+              logisim-evolution --help > /tmp/logisim-help.txt
+              grep -i "usage:" /tmp/logisim-help.txt
+              Xvfb :42 -screen 0 1920x1080x24 > /tmp/xvfb.log 2>&1 &
+              display_pid=$!
+              trap "kill $display_pid 2>/dev/null || true" EXIT
+              export DISPLAY=:42
+              for i in {1..15}; do
+                if xwininfo -root >/dev/null 2>&1; then break; fi
+                sleep 1
+              done
+              logisim-evolution > /tmp/logisim-gui.txt 2>&1 &
+              app_pid=$!
+              for i in {1..25}; do
+                windows=$(xwininfo -root -tree)
+                if grep -qi "Logisim-evolution" <<<"$windows"; then
+                  kill "$app_pid"
+                  exit 0
+                fi
+                if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
+                sleep 1
+              done
+              cat /tmp/logisim-gui.txt
+              exit 1
+            '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: si100b-arch
+          path: |
+            arch-build/*.pkg.tar.zst
+            arch-build/*.pkg.tar.zst.sha256
+          if-no-files-found: error
+  upload:
+    needs: [build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: si100b-arch
+          path: release-assets
+      - name: Attach the verified Arch package to v5.0.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum --check *.sha256
+          gh release upload v5.0.0 -R "$GITHUB_REPOSITORY" *.pkg.tar.zst *.sha256

@@ -1,0 +1,20 @@
+pkgname=logisim-evolution-si100b
+pkgver=5.0.0
+pkgrel=1
+pkgdesc='SI100B course edition of Logisim-evolution with an embedded Java runtime'
+arch=('x86_64')
+url='https://github.com/Heaticy/logisim-evolution'
+license=('GPL-3.0-only')
+depends=('alsa-lib' 'fontconfig' 'freetype2' 'glibc' 'libgcc' 'libx11' 'libxext' 'libxi' 'libxrender' 'libxtst' 'zlib')
+conflicts=('logisim-evolution' 'logisim-evolution-bin')
+options=('!strip' '!debug')
+
+package() {
+    install -d "$pkgdir/opt" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications"
+    cp -a "$startdir/deb-root/opt/logisim-evolution" "$pkgdir/opt/"
+    ln -s /opt/logisim-evolution/bin/logisim-evolution "$pkgdir/usr/bin/logisim-evolution"
+    local desktop
+    desktop=$(find "$startdir/deb-root/opt/logisim-evolution" -type f -name '*.desktop' -print -quit)
+    test -f "$desktop"
+    install -Dm644 "$desktop" "$pkgdir/usr/share/applications/logisim-evolution-si100b.desktop"
+}
