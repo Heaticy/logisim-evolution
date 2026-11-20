@@ -1100,7 +1100,6 @@ tasks {
   }
 
   shadowJar {
-    exclude("**/*_zh.properties", "**/*_zh_*.properties")
     archiveBaseName.set(project.name)
     archiveVersion.set(ext.get(APP_VERSION) as String)
     from(".") {
@@ -1110,9 +1109,14 @@ tasks {
     }
   }
 
-  processResources {
+  // Keep upstream localization test fixtures intact and exclude Chinese from
+  // every distributable JAR, including the JAR embedded in native installers.
+  withType<Jar>().configureEach {
     exclude("**/*_zh.properties", "**/*_zh_*.properties")
     exclude("doc/zh/**", "doc/doc_zh.hs", "doc/map_zh.jhm", "doc/search_lookup_zh/**")
+    filesMatching("resources/logisim/settings.properties") {
+      filter { line -> if (line.startsWith("locales =")) line.removeSuffix(" zh") else line }
+    }
   }
 
   // Checkstyles related tasks: "checkstylMain" and "checkstyleTest"
