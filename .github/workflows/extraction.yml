@@ -1,0 +1,92 @@
+name: Capture SI100B HW0 ZIP extraction in Windows Explorer
+on:
+  push:
+    branches: [si100b-hw0-starter-name-screenshots]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'EE-HW0_student_starter.zip'
+          New-Item -ItemType Directory -Force (Split-Path $zip) | Out-Null
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e/EE-HW0_student_starter.zip' -UseBasicParsing -OutFile $zip
+          if ((Get-FileHash -Path $zip).Hash -ne '3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e') { throw 'Wrong ZIP hash.' }
+          $desktopScript = Join-Path $env:RUNNER_TEMP 'capture-zip-dialog.ps1'
+          $env:HW0_SHOT_DIR = $env:RUNNER_TEMP
+          @'
+          param([string]$OutDir, [string]$Zip)
+          $ErrorActionPreference = 'Stop'
+          try {
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName UIAutomationTypes
+            Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WindowApi {
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+          }
+          "@
+            $shell = New-Object -ComObject Shell.Application
+            $folder = $shell.NameSpace((Split-Path $Zip))
+            $item = $folder.ParseName((Split-Path -Leaf $Zip))
+            $verbs = @($item.Verbs())
+            $selected = $verbs | Where-Object { $_.Name.Replace('&','') -match '^Extract All' } | Select-Object -First 1
+            if (!$selected) { throw ('Extract All verb missing: ' + (($verbs | ForEach-Object Name) -join ', ')) }
+            $selected.DoIt()
+            $ui = [System.Windows.Automation.AutomationElement]
+            $scope = [System.Windows.Automation.TreeScope]::Children
+            $dialog = $null
+            for ($i = 0; $i -lt 45 -and !$dialog; $i++) {
+              Start-Sleep -Milliseconds 600
+              $dialog = $ui::RootElement.FindAll($scope, [System.Windows.Automation.Condition]::TrueCondition) |
+                Where-Object { $_.Current.Name -match 'Extract Compressed|Extract Zipped' } | Select-Object -First 1
+            }
+            if (!$dialog) { throw 'Explorer extraction dialog did not open.' }
+            $bounds = $dialog.Current.BoundingRectangle
+            if ($bounds.Width -lt 300 -or $bounds.Height -lt 170) { throw 'Dialog bounds invalid.' }
+            [WindowApi]::SetForegroundWindow([IntPtr]$dialog.Current.NativeWindowHandle) | Out-Null
+            Start-Sleep -Milliseconds 800
+            $bitmap = New-Object System.Drawing.Bitmap ([int]$bounds.Width), ([int]$bounds.Height)
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+              $graphics.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $bitmap.Size)
+              $bitmap.Save((Join-Path $OutDir 'hw0-windows-extract.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally {
+              $graphics.Dispose()
+              $bitmap.Dispose()
+            }
+          } catch {
+            $_ | Out-String | Set-Content (Join-Path $OutDir 'capture-error.txt')
+            exit 1
+          }
+          '@ | Set-Content -LiteralPath $desktopScript -Encoding UTF8
+          $session = (Get-Process -Id $PID).SessionId
+          Write-Output "Workflow session: $session"
+          Get-Process explorer -ErrorAction SilentlyContinue | Select-Object Id, SessionId
+          if ($session -eq 0) {
+            $task = 'SI100B-HW0-Capture'
+            $who = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            $arguments = '-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -OutDir "{1}" -Zip "{2}"' -f $desktopScript,$env:RUNNER_TEMP,$zip
+            $principal = New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive
+            $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
+            Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null
+            Start-ScheduledTask -TaskName $task
+          } else {
+            & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $desktopScript -OutDir $env:RUNNER_TEMP -Zip $zip
+          }
+          $image = Join-Path $env:RUNNER_TEMP 'hw0-windows-extract.png'
+          $err = Join-Path $env:RUNNER_TEMP 'capture-error.txt'
+          for ($i=0; $i -lt 40 -and !(Test-Path $image) -and !(Test-Path $err); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $err) { throw (Get-Content $err -Raw) }
+          if (!(Test-Path $image)) { throw 'Interactive task did not produce an image.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hw0-windows-extract
+          path: ${{ runner.temp }}/hw0-windows-extract.png
+          if-no-files-found: error

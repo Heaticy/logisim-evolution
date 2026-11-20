@@ -1,0 +1,148 @@
+name: Capture Windows Explorer file extension controls for EE-HW0
+on:
+  push:
+    branches: [si100b-hw0-starter-name-screenshots]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: windows-2025
+    timeout-minutes: 7
+    steps:
+      - shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $downloads = Join-Path $env:USERPROFILE 'Downloads'
+          New-Item -ItemType Directory -Force $downloads | Out-Null
+          $zip = Join-Path $downloads 'EE-HW0_student_starter.zip'
+          $folder = Join-Path $downloads 'EE-HW0_student_starter'
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e/EE-HW0_student_starter.zip' -UseBasicParsing -OutFile $zip
+          if ((Get-FileHash -Path $zip).Hash -ne '3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e') { throw 'Wrong ZIP hash.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $folder
+          $script = Join-Path $env:RUNNER_TEMP 'capture-extensions.ps1'
+          @'
+          param([string]$OutDir,[string]$Folder)
+          $ErrorActionPreference = 'Stop'
+          try {
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName UIAutomationTypes
+            Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Win {
+            [StructLayout(LayoutKind.Sequential)] public struct Rect {public int Left, Top, Right, Bottom;}
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
+            [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+            [DllImport("user32.dll")] public static extern void mouse_event(uint flags,int dx,int dy,uint data,IntPtr extra);
+            [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h,int x,int y,int w,int height,bool repaint);
+            [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h,int attribute,out Rect rect,int size);
+          }
+          "@
+            $ui=[System.Windows.Automation.AutomationElement]
+            $children=[System.Windows.Automation.TreeScope]::Children
+            $desc=[System.Windows.Automation.TreeScope]::Descendants
+            function Find-Named($parent,[string]$name) {
+              $condition=New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty,$name)
+              $parent.FindFirst($desc,$condition)
+            }
+            function Find-Menu([string]$name) {
+              $current=Find-Named $window $name
+              if ($current) { return $current }
+              foreach ($top in $ui::RootElement.FindAll($children,[System.Windows.Automation.Condition]::TrueCondition)) {
+                if ($top.Current.ProcessId -ne $window.Current.ProcessId) {continue}
+                $candidate=Find-Named $top $name
+                if ($candidate) {return $candidate}
+              }
+            }
+            function Cursor-On($element) {
+              $r=$element.Current.BoundingRectangle
+              if ($r.Width -lt 5 -or $r.Height -lt 5) {throw 'Invalid Explorer control bounds.'}
+              [Win]::SetCursorPos([int]($r.X+$r.Width/2),[int]($r.Y+$r.Height/2)) | Out-Null
+            }
+            function Click($element) {
+              Cursor-On $element
+              [Win]::mouse_event(2,0,0,0,[IntPtr]::Zero)
+              [Win]::mouse_event(4,0,0,0,[IntPtr]::Zero)
+              Start-Sleep -Milliseconds 550
+            }
+            function Snapshot([string]$name) {
+              $rect=New-Object 'Win+Rect'
+              $result=[Win]::DwmGetWindowAttribute($handle,9,[ref]$rect,16)
+              if ($result -ne 0) {throw 'Could not locate Explorer bounds.'}
+              $bitmap=New-Object Drawing.Bitmap ($rect.Right-$rect.Left),($rect.Bottom-$rect.Top)
+              $graphics=[Drawing.Graphics]::FromImage($bitmap)
+              try {
+                $graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,$bitmap.Size)
+                $bitmap.Save((Join-Path $OutDir $name),[Drawing.Imaging.ImageFormat]::Png)
+              } finally {$graphics.Dispose();$bitmap.Dispose()}
+            }
+            Start-Process explorer.exe -ArgumentList ('"{0}"' -f $Folder)
+            $window=$null
+            for ($i=0; $i -lt 35 -and !$window; $i++) {
+              Start-Sleep -Milliseconds 450
+              $window=$ui::RootElement.FindAll($children,[System.Windows.Automation.Condition]::TrueCondition) |
+                Where-Object {$_.Current.ClassName -eq 'CabinetWClass' -and $_.Current.Name -match 'EE-HW0_student_starter'} | Select-Object -First 1
+            }
+            if (!$window) {throw 'Explorer did not open the extracted EE-HW0 folder.'}
+            $handle=[IntPtr]$window.Current.NativeWindowHandle
+            [Win]::ShowWindow($handle,9) | Out-Null
+            [Win]::MoveWindow($handle,20,20,930,640,$true) | Out-Null
+            [Win]::SetForegroundWindow($handle) | Out-Null
+            Start-Sleep -Milliseconds 800
+            $view=Find-Named $window 'View'
+            if (!$view) {throw 'View menu not found.'}
+            Click $view
+            $show=Find-Menu 'Show'
+            if (!$show) {throw 'Show submenu not found.'}
+            Cursor-On $show
+            Start-Sleep -Milliseconds 800
+            $extensions=Find-Menu 'File name extensions'
+            if (!$extensions) {
+              Click $show
+              $extensions=Find-Menu 'File name extensions'
+            }
+            if (!$extensions) {throw 'File name extensions command not found.'}
+            $advanced='HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+            if ((Get-ItemProperty -Path $advanced -Name HideFileExt).HideFileExt -ne 0) {
+              Click $extensions
+              if ((Get-ItemProperty -Path $advanced -Name HideFileExt).HideFileExt -ne 0) {throw 'Explorer did not enable extensions.'}
+              Click $view
+              $show=Find-Menu 'Show'
+              Cursor-On $show
+              Start-Sleep -Milliseconds 800
+              $extensions=Find-Menu 'File name extensions'
+              if (!$extensions) {Click $show; $extensions=Find-Menu 'File name extensions'}
+              if (!$extensions) {throw 'File name extensions command not found after enabling.'}
+            }
+            Cursor-On $extensions
+            Start-Sleep -Milliseconds 500
+            Snapshot 'ee-hw0-windows-extensions.png'
+          } catch {
+            $_ | Out-String | Set-Content (Join-Path $OutDir 'extension-error.txt')
+            exit 1
+          }
+          '@ | Set-Content -LiteralPath $script -Encoding UTF8
+          $session = (Get-Process -Id $PID).SessionId
+          if ($session -eq 0) {
+            $task = 'SI100B-HW0-FileExtensions'
+            $who = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            $arguments = '-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -OutDir "{1}" -Folder "{2}"' -f $script,$env:RUNNER_TEMP,$folder
+            $principal = New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive
+            $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
+            Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null
+            Start-ScheduledTask -TaskName $task
+          } else {
+            & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $script -OutDir $env:RUNNER_TEMP -Folder $folder
+          }
+          $image = Join-Path $env:RUNNER_TEMP 'ee-hw0-windows-extensions.png'
+          $err = Join-Path $env:RUNNER_TEMP 'extension-error.txt'
+          for ($i=0; $i -lt 40 -and !(Test-Path $image) -and !(Test-Path $err); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $err) { throw (Get-Content $err -Raw) }
+          if (!(Test-Path $image)) { throw 'Interactive task did not produce an image.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ee-hw0-windows-extensions
+          path: ${{ runner.temp }}/ee-hw0-windows-extensions.png
+          if-no-files-found: error
