@@ -4,6 +4,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      stage_release:
+        description: Stage the tested SI100B 5.0.0 installers as a draft release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -122,3 +127,45 @@ jobs:
           path: |
             build/dist/*.dmg
             build/dist/*.pkg
+
+  stage_release:
+    name: Stage tested GitHub release
+    if: github.event_name == 'workflow_dispatch' && inputs.stage_release && github.ref_name == 'si100b-5.0-source'
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Verify the expected asset set and create the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          expected=(
+            logisim-evolution-5.0.0-all.jar
+            logisim-evolution_5.0.0_amd64.deb
+            logisim-evolution-5.0.0-amd64.msi
+            logisim-evolution-5.0.0-windows-amd64.zip
+            logisim-evolution-5.0.0-aarch64.dmg
+            logisim-evolution-5.0.0-aarch64.pkg
+            logisim-evolution-5.0.0-x86_64.dmg
+            logisim-evolution-5.0.0-x86_64.pkg
+          )
+          for package in "${expected[@]}"; do test -s "$package"; done
+          sha256sum "${expected[@]}" > SHA256SUMS
+          cat > release-notes.md <<'MD'
+          SI100B course edition based on Logisim-evolution 5.0.0. The interface starts in English and the Chinese translations are excluded. This build includes the upstream HiDPI fix for oversized canvas text.
+
+          - **Windows (x64)**: The MSI adds `logisim-evolution` and `logisim` to PATH. Open a new terminal after installation. A portable ZIP is also available.
+          - **macOS**: Choose the PKG for Apple Silicon (`aarch64`) or Intel (`x86_64`) to install the `logisim-evolution` command. The DMG is also available.
+          - **Linux**: Use the Debian/Ubuntu x64 package or the cross-platform JAR. The JAR requires Java 21 or newer.
+
+          [Upstream 5.0.0 release](https://github.com/logisim-evolution/logisim-evolution/releases/tag/v5.0.0) · [HiDPI patch](https://github.com/logisim-evolution/logisim-evolution/pull/3122)
+          MD
+          gh release create v5.0.0 "${expected[@]}" SHA256SUMS             --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA"             --title 'Logisim-evolution 5.0.0 · SI100B' --notes-file release-notes.md
