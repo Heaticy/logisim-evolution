@@ -47,10 +47,14 @@ jobs:
             app_pid=$!
             trap "kill $app_pid 2>/dev/null || true" EXIT
             for attempt in {1..30}; do
-              if xwininfo -root -tree | grep -qi "Logisim-evolution"; then
+              windows=$(xwininfo -root -tree)
+              if grep -qi "Logisim-evolution" <<<"$windows"; then
                 exit 0
               fi
-              kill -0 "$app_pid"
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat build/course-gui.log >&2
+                exit 1
+              fi
               sleep 1
             done
             cat build/course-gui.log

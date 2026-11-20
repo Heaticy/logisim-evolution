@@ -23,6 +23,8 @@ target_path="/opt/logisim-evolution/bin/logisim-evolution"
 
 case "$1" in
     configure)
+        # xdg-desktop-menu requires this directory even on systems without a desktop.
+        mkdir -p /etc/xdg/menus
 DESKTOP_COMMANDS_INSTALL
 LAUNCHER_AS_SERVICE_COMMANDS_INSTALL
         ln -sfn "${target_path}" "${launcher_path}"
