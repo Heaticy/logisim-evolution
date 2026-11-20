@@ -55,6 +55,7 @@ jobs:
           if ($exit -ne 1 -or (@($result | Select-String '^FAIL (NAND1|NOR1|XOR1|MUX2|MUX4) \(0/')).Count -ne 5) {
             throw 'Windows PowerShell self-test did not report all five failing circuits for the blank starter.'
           }
+          exit 0
   unix:
     strategy:
       fail-fast: false
