@@ -1,4 +1,4 @@
-name: Verify the SI100B Windows native launcher
+name: Verify the SI100B HW0 native self-test
 on:
   push:
     branches: [si100b-hw0-windows-probe]
@@ -8,6 +8,7 @@ jobs:
   verify:
     runs-on: windows-2022
     steps:
+      - uses: actions/checkout@v6
       - shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -48,3 +49,45 @@ jobs:
             if ($version.out -match 'v?5\.0\.0' -and $table.out -match '(?m)^A\s+B\s+RESULT' -and $table.out -match '(?m)^0\s+0\s+U') { $worked=$true }
           }
           if (!$worked) { throw 'Neither native launcher emitted the expected truth table.' }
+          $result = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/si100b-hw0/Self-Test.ps1 -Circuit $circuit
+          $exit = $LASTEXITCODE
+          Write-Output $result
+          if ($exit -ne 1 -or (@($result | Select-String '^FAIL (NAND1|NOR1|XOR1|MUX2|MUX4) \(0/')).Count -ne 5) {
+            throw 'Windows PowerShell self-test did not report all five failing circuits for the blank starter.'
+          }
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            asset: logisim-evolution_5.0.0_amd64.deb
+            digest: fd63499476162760bf8eedd08acc76be58cb9d840eaf719cddad9ac611d3f962
+          - runner: macos-15
+            asset: logisim-evolution-5.0.0-aarch64.pkg
+            digest: fc44076022f02c9683424dccf80e90d159991d9a4e5ecd6ab1121b83466b2cbe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install and run the course native command
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+          DIGEST: ${{ matrix.digest }}
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 "https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/$ASSET" -o "$RUNNER_TEMP/$ASSET"
+          printf '%s  %s\n' "$DIGEST" "$RUNNER_TEMP/$ASSET" | shasum -a 256 -c
+          if [[ "$ASSET" == *.pkg ]]; then
+            sudo installer -pkg "$RUNNER_TEMP/$ASSET" -target /
+          else
+            sudo dpkg -i "$RUNNER_TEMP/$ASSET"
+          fi
+          command -v logisim-evolution
+          curl -fLsS --retry 3 'https://vsplab.cn/resources/uploads/08faba94ea17a1a2e4a4d65255a3edc53beac7ea36907aa45771a35dcd45a504/HW0-ex1.zip' -o "$RUNNER_TEMP/hw0.zip"
+          (cd "$RUNNER_TEMP" && unzip -o hw0.zip ex1.circ)
+          result=0
+          sh tests/si100b-hw0/self-test.sh "$RUNNER_TEMP/ex1.circ" > "$RUNNER_TEMP/self-test.log" || result=$?
+          cat "$RUNNER_TEMP/self-test.log"
+          test "$result" -eq 1
+          test "$(grep -c '^FAIL .* (0/' "$RUNNER_TEMP/self-test.log")" -eq 5
