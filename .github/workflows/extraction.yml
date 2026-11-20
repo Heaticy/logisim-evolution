@@ -29,6 +29,8 @@ jobs:
           using System;
           using System.Runtime.InteropServices;
           public static class WindowApi {
+            [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+            [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd,int attribute,out Rect rect,int size);
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
           }
           "@
@@ -52,10 +54,13 @@ jobs:
             if ($bounds.Width -lt 300 -or $bounds.Height -lt 170) { throw 'Dialog bounds invalid.' }
             [WindowApi]::SetForegroundWindow([IntPtr]$dialog.Current.NativeWindowHandle) | Out-Null
             Start-Sleep -Milliseconds 800
-            $bitmap = New-Object System.Drawing.Bitmap ([int]$bounds.Width), ([int]$bounds.Height)
+            $rect=New-Object 'WindowApi+Rect'
+            $result=[WindowApi]::DwmGetWindowAttribute([IntPtr]$dialog.Current.NativeWindowHandle,9,[ref]$rect,16)
+            if ($result -ne 0) { throw 'Could not locate dialog frame.' }
+            $bitmap = New-Object System.Drawing.Bitmap ($rect.Right-$rect.Left), ($rect.Bottom-$rect.Top)
             $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
             try {
-              $graphics.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $bitmap.Size)
+              $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
               $bitmap.Save((Join-Path $OutDir 'hw0-windows-extract.png'), [System.Drawing.Imaging.ImageFormat]::Png)
             } finally {
               $graphics.Dispose()
