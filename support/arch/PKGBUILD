@@ -5,7 +5,7 @@ pkgdesc='SI100B course edition of Logisim-evolution'
 arch=('x86_64')
 url='https://github.com/Heaticy/logisim-evolution'
 license=('GPL-3.0-only')
-depends=('jre21-openjdk')
+depends=('jre21-openjdk' 'alsa-lib' 'fontconfig' 'libxrender' 'libxtst' 'ttf-font')
 conflicts=('logisim-evolution' 'logisim-evolution-bin')
 
 package() {
