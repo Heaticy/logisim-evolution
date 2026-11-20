@@ -1,0 +1,53 @@
+name: Test the HW0 PowerShell script from the student ZIP
+on:
+  push:
+    branches: [si100b-hw0-csv-check]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2022
+    steps:
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Join-Path $env:RUNNER_TEMP 'logisim-evolution-5.0.0-amd64.msi'
+          Invoke-WebRequest 'https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/logisim-evolution-5.0.0-amd64.msi' -OutFile $msi
+          if ((Get-FileHash $msi).Hash -ne 'd3aff607d21a056a6240b890272428e7d7b362407001ac4b1e38e1235f6bebd9') { throw 'MSI hash mismatch.' }
+          $p = Start-Process msiexec.exe -ArgumentList @('/i', ('"{0}"' -f $msi), '/qn', '/norestart') -Wait -PassThru
+          if ($p.ExitCode -notin @(0,3010)) { throw "MSI installation failed: $($p.ExitCode)" }
+          $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')
+          $zip = Join-Path $env:RUNNER_TEMP 'hw0.zip'
+          $folder = Join-Path $env:RUNNER_TEMP 'SI100B HW0 From ZIP'
+          Invoke-WebRequest 'https://vsplab.cn/resources/uploads/aae57d9d6d5330921fbe763861f38ef481abf331c0b30f274a628ee59e9ef003/SI100B-HW0-Student.zip' -OutFile $zip
+          if ((Get-FileHash $zip).Hash -ne 'aae57d9d6d5330921fbe763861f38ef481abf331c0b30f274a628ee59e9ef003') { throw 'Student ZIP hash mismatch.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $folder
+          $script = Join-Path $folder 'Self-Test.ps1'
+          $start = New-Object System.Diagnostics.ProcessStartInfo
+          $start.FileName = "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe"
+          $start.Arguments = ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $script)
+          $start.UseShellExecute = $false
+          $start.RedirectStandardOutput = $true
+          $start.RedirectStandardError = $true
+          $start.RedirectStandardInput = $true
+          $process = [System.Diagnostics.Process]::Start($start)
+          $output = $process.StandardOutput.ReadToEndAsync()
+          $errors = $process.StandardError.ReadToEndAsync()
+          Start-Sleep -Seconds 6
+          if ($process.HasExited) { throw "Script closed without waiting: $($output.Result) $($errors.Result)" }
+          $process.StandardInput.WriteLine('')
+          $process.StandardInput.Close()
+          if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Script did not exit.' }
+          $result = $output.Result
+          Write-Output $result
+          if ($process.ExitCode -ne 1 -or ([regex]::Matches($result, '(?m)^FAIL (NAND1|NOR1|XOR1|MUX2|MUX4) - first mismatch')).Count -ne 5 -or $result -notmatch 'Press Enter to close') {
+            throw "Expected five failed tests for the blank template and a prompt: $($errors.Result)"
+          }
+          $csv = Join-Path $folder 'student-output.csv'
+          $lines = @(Get-Content -LiteralPath $csv)
+          if ($lines.Count -ne 65 -or $lines[0] -cne 'count,NAND1,NOR1,XOR1,MUX2,MUX4' -or $lines[1] -cne '00000000,U,U,U,U,U') {
+            throw 'Student CSV does not contain the expected header and 64 output rows.'
+          }
+          if ([IO.File]::ReadAllText($csv).Contains([char]13)) { throw 'Student CSV line endings differ from the reference.' }
+          Write-Output $lines[0] $lines[1]
+          exit 0
