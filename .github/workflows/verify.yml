@@ -1,0 +1,37 @@
+name: Verify SI100B course PKG on Intel Mac
+on:
+  push:
+    branches: [si100b-hw0-intel-check]
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          work="$(mktemp -d)"
+          curl -fLsS --retry 3 -o "$work/logisim.pkg" 'https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/logisim-evolution-5.0.0-x86_64.pkg'
+          curl -fLsS --retry 3 -o "$work/SHA256SUMS" 'https://github.com/Heaticy/logisim-evolution/releases/download/v5.0.0/SHA256SUMS'
+          sha="$(awk '$2=="logisim-evolution-5.0.0-x86_64.pkg"{print $1}' "$work/SHA256SUMS")"
+          test "${#sha}" -eq 64
+          printf '%s  %s
+' "$sha" "$work/logisim.pkg" | shasum -a 256 -c
+          sudo /usr/sbin/installer -pkg "$work/logisim.pkg" -target /
+          curl -fLsS --retry 3 -o "$work/EE-HW0_student_starter.zip" 'https://vsplab.cn/resources/uploads/3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e/EE-HW0_student_starter.zip'
+          printf '%s  %s\n' '3010a1640e0a52980d5fe8bb0585cb5b79d21dac90fab3c4bf167a3172b0815e' "$work/EE-HW0_student_starter.zip" | shasum -a 256 -c
+          mkdir "$work/EE-HW0_student_starter"
+          unzip -q "$work/EE-HW0_student_starter.zip" -d "$work/EE-HW0_student_starter"
+          cd "$work/EE-HW0_student_starter"
+          /usr/bin/env PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/zsh -lc 'command -v logisim-evolution && logisim-evolution --version'
+          result=0
+          /usr/bin/env PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/zsh -lc 'sh ./self-test.sh' > "$work/result.txt" 2>&1 || result=$?
+          cat "$work/result.txt"
+          test "$result" -eq 1
+          test "$(grep -c '^FAIL ' "$work/result.txt")" -eq 5
+          test "$(wc -l < student-output.csv)" -eq 65
+          test "$(head -n 1 student-output.csv)" = 'count,NAND1,NOR1,XOR1,MUX2,MUX4'
+          test "$(sed -n '2p' student-output.csv)" = '00000000,U,U,U,U,U'
